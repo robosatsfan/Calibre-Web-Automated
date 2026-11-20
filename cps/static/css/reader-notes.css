@@ -289,6 +289,39 @@
   box-sizing: border-box;
   padding: 4px 6px;
   font: inherit;
+  color: #222;
+  background: #fff;
+}
+
+#cwa-pdf-title-wrap[hidden],
+#cwa-pdf-note-dialog .cwa-pdf-error[hidden] {
+  display: none;
+}
+
+#cwa-pdf-note-dialog strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.cwa-pdf-actions button {
+  min-height: 32px;
+  padding: 4px 14px;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  background: #f4f4f4;
+  color: #222;
+  cursor: pointer;
+}
+
+.cwa-pdf-actions button[type="submit"] {
+  border-color: #45b29d;
+  background: #45b29d;
+  color: #fff;
+}
+
+.cwa-pdf-actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 #cwa-pdf-note-dialog textarea {

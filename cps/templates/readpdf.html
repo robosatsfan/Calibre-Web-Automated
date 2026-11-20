@@ -522,5 +522,59 @@ See https://github.com/adobe-type-tools/cmap-resources
 
     </div> <!-- outerContainer -->
     <div id="printContainer"></div>
+{% if notes_enabled %}
+    <button type="button" id="cwa-pdf-note-btn" title="{{ _('Add note') }}">✎ {{ _('Note') }}</button>
+    <dialog id="cwa-pdf-note-dialog" aria-labelledby="cwa-pdf-note-heading">
+      <form method="dialog" id="cwa-pdf-note-form">
+        <strong id="cwa-pdf-note-heading">{{ _('Add note') }}</strong>
+        <label for="cwa-pdf-quote">{{ _('Text') }}</label>
+        <textarea id="cwa-pdf-quote" rows="4"></textarea>
+        <div class="cwa-pdf-row">
+          <div>
+            <label for="cwa-pdf-page">{{ _('Page') }}</label>
+            <input type="number" id="cwa-pdf-page" min="1" step="1" required>
+          </div>
+          <div>
+            <label for="cwa-pdf-paragraph">{{ _('Paragraph (optional)') }}</label>
+            <input type="number" id="cwa-pdf-paragraph" min="1" step="1">
+          </div>
+        </div>
+        <label for="cwa-pdf-comment">{{ _('Comment') }}</label>
+        <textarea id="cwa-pdf-comment" rows="3"></textarea>
+        <label for="cwa-pdf-target">{{ _('Add to') }}</label>
+        <select id="cwa-pdf-target">
+          <option value="">{{ _('New note') }}</option>
+        </select>
+        <div id="cwa-pdf-title-wrap">
+          <label for="cwa-pdf-title">{{ _('Title') }}</label>
+          <input type="text" id="cwa-pdf-title" maxlength="255" placeholder="{{ _('Optional, defaults to the book title') }}">
+        </div>
+        <div class="cwa-pdf-error" id="cwa-pdf-error" role="alert" hidden></div>
+        <div class="cwa-pdf-actions">
+          <button type="button" id="cwa-pdf-cancel">{{ _('Cancel') }}</button>
+          <button type="submit" id="cwa-pdf-save">{{ _('Save') }}</button>
+        </div>
+      </form>
+    </dialog>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/reader-notes.css') }}">
+    <script>
+    window.calibreNotes = {
+        enabled: true,
+        bookId: {{ pdffile|tojson }},
+        createUrl: {{ url_for('notes.citation_create')|tojson }},
+        mineUrl: {{ url_for('notes.notes_mine')|tojson }},
+        csrf: {{ csrf_token()|tojson }},
+        i18n: {{ {
+            'saved': _('Saved'),
+            'required': _('Enter a quote or a comment.'),
+            'invalidPage': _('Enter a valid page number.'),
+            'invalidParagraph': _('Enter a valid paragraph number.'),
+            'saveError': _('Could not save the quote.'),
+            'requestError': _('Request failed')
+        }|tojson }}
+    };
+    </script>
+    <script src="{{ url_for('static', filename='js/reading/pdf-notes.js') }}"></script>
+{% endif %}
   </body>
 </html>
