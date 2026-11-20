@@ -51,6 +51,7 @@ from .services.worker import WorkerThread
 from .tasks_status import render_task_status
 from .usermanagement import user_login_required
 from .string_helper import strip_whitespaces
+from .notes_utils import valid_cfi
 
 # CWA Imports
 import sqlite3
@@ -2794,6 +2795,9 @@ def read_book(book_id, book_format):
 
     book.ordered_authors = calibre_db.order_authors([book], False)
 
+    notes_enabled = (current_user.is_authenticated
+                     and current_user.check_visibility(constants.SIDEBAR_NOTES))
+
     # check if book has a bookmark
     bookmark = None
     if current_user.is_authenticated:
@@ -2847,12 +2851,18 @@ def read_book(book_id, book_format):
     
     if book_format.lower() in ("epub", "kepub"):
         log.debug("Start epub reader for %d (%s)", book_id, book_format.lower())
+        jump_cfi = request.args.get('cfi')
+        if not valid_cfi(jump_cfi):
+            jump_cfi = None
+        jump_citation = request.args.get('citation', type=int)
         return render_title_template('read.html', bookid=book_id, title=book.title,
                                      bookmark=bookmark, kosync_progress=kosync_progress,
-                                     book_format=book_format.lower())
+                                     book_format=book_format.lower(), notes_enabled=notes_enabled,
+                                     jump_cfi=jump_cfi, jump_citation=jump_citation)
     elif book_format.lower() == "pdf":
         log.debug("Start pdf reader for %d", book_id)
-        return render_title_template('readpdf.html', pdffile=book_id, title=book.title)
+        return render_title_template('readpdf.html', pdffile=book_id, title=book.title,
+                                     notes_enabled=notes_enabled)
     elif book_format.lower() == "txt":
         log.debug("Start txt reader for %d", book_id)
         return render_title_template('readtxt.html', txtfile=book_id, title=book.title)
