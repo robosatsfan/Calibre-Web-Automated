@@ -68,7 +68,9 @@ qFinished(()=>{
     }
     epub.locations.generate().then(()=> {
         // Restore progress from localStorage if available
-        if (window.calibre && window.calibre.bookUrl && reader && reader.rendition) {
+        // A notes jump target (?cfi=...) wins over the saved reading position
+        let hasNotesJump = window.cwaNotes && window.cwaNotes.hasJumpTarget;
+        if (!hasNotesJump && window.calibre && window.calibre.bookUrl && reader && reader.rendition) {
             let bookKey = window.calibre.bookUrl;
             let savedProgress = localStorage.getItem("calibre.reader.progress." + bookKey);
             let hasBookmark = window.calibre.bookmark && window.calibre.bookmark.length > 0;
