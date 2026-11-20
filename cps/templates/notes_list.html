@@ -8,9 +8,30 @@
 <div class="discover notes-page">
   <div class="notes-toolbar">
     <h2>{{ _('Notes') }}</h2>
-    <a class="btn btn-primary" href="{{ url_for('notes.note_create') }}">
-      <span class="glyphicon glyphicon-plus"></span> {{ _('New note') }}
-    </a>
+    <div class="notes-actions">
+      <div class="btn-group notes-export">
+        <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+          {{ _('Export') }} <span class="caret"></span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-right">
+          <li>
+            <a href="{{ url_for('notes.notes_export', fmt='md', q=filters.q or None, tag=filters.tag or None,
+                                type=filters.type or None, book_id=filters.book_id) }}">
+              {{ _('Markdown (.md)') }}
+            </a>
+          </li>
+          <li>
+            <a href="{{ url_for('notes.notes_export', fmt='json', q=filters.q or None, tag=filters.tag or None,
+                                type=filters.type or None, book_id=filters.book_id) }}">
+              {{ _('JSON (.json)') }}
+            </a>
+          </li>
+        </ul>
+      </div>
+      <a class="btn btn-primary" href="{{ url_for('notes.note_create') }}">
+        <span class="glyphicon glyphicon-plus"></span> {{ _('New note') }}
+      </a>
+    </div>
   </div>
 
   <div class="notes-tabs">

@@ -8,7 +8,7 @@
 
 from datetime import datetime, timezone
 
-from flask import Blueprint, abort, flash, g, jsonify, redirect, request, url_for
+from flask import Blueprint, Response, abort, flash, g, jsonify, redirect, request, url_for
 from flask_babel import gettext as _
 from sqlalchemy import or_
 
@@ -136,11 +136,11 @@ def _json_error(message, status=400):
 NOTES_PER_PAGE = 25
 
 
-def _query_notes(args):
+def _query_notes(args, force_scope=None):
     """Build the filtered Notes query shared by the list page and the export."""
     query = ub.session.query(ub.Note).outerjoin(ub.NoteCitation).distinct()
 
-    scope = (args.get('scope') or 'mine').lower()
+    scope = force_scope or (args.get('scope') or 'mine').lower()
     if scope == 'shared':
         query = query.filter(ub.Note.is_public.is_(True),
                              ub.Note.user_id != current_user.id)
@@ -514,3 +514,119 @@ def citation_delete(citation_id):
         _touch_note(note)
     ub.session_commit()
     return '', 204
+
+
+# ---------------------------------------------------------------------------
+# Export (own notes only)
+# ---------------------------------------------------------------------------
+
+def _markdown_escape_body(text):
+    """Indent user text so a stray heading marker cannot break the export structure."""
+    lines = []
+    for line in (text or '').splitlines():
+        if line.lstrip().startswith('#'):
+            line = line.replace('#', '\\#', 1)
+        lines.append(line)
+    return '\n'.join(lines)
+
+
+def _markdown_quote_block(text):
+    lines = []
+    for line in (text or '').splitlines():
+        lines.append('> ' + line if line.strip() else '>')
+    return '\n'.join(lines)
+
+
+def _citation_location_label(citation):
+    if citation.book_format in ('EPUB', 'KEPUB'):
+        return citation.chapter_label or ''
+    if citation.page:
+        label = '{} {}'.format(_('Page'), citation.page)
+        if citation.paragraph:
+            label += ' · {} {}'.format(_('Paragraph'), citation.paragraph)
+        return label
+    return ''
+
+
+def _export_markdown(notes):
+    lines = ['# {} — {}'.format(_('Notes export'), datetime.now(timezone.utc).strftime('%Y-%m-%d')),
+             '']
+    for note in notes:
+        lines.append('## {}'.format(note.title or _('Untitled')))
+        if note.tags:
+            lines.append('')
+            lines.append('{}: {}'.format(_('Tags'), ', '.join(note.tags.split(','))))
+        lines.append('')
+        body = _markdown_escape_body(note.body)
+        if body:
+            lines.append(body)
+            lines.append('')
+        for citation in note.citations:
+            meta = _book_meta(citation.book_id)
+            book_title = meta['title'] if meta else _('Unknown book')
+            if citation.quote:
+                lines.append(_markdown_quote_block(citation.quote))
+            location = _citation_location_label(citation)
+            source = '— *{}*'.format(book_title.replace('*', r'\*'))
+            if location:
+                source += ', {}'.format(location)
+            lines.append(source)
+            lines.append('')
+            if citation.comment:
+                lines.append(_markdown_escape_body(citation.comment))
+                lines.append('')
+        lines.append('---')
+        lines.append('')
+    return '\n'.join(lines)
+
+
+def _export_json(notes):
+    payload = []
+    for note in notes:
+        citations = []
+        for citation in note.citations:
+            meta = _book_meta(citation.book_id)
+            citations.append({
+                'book_id': citation.book_id,
+                'book_title': meta['title'] if meta else _('Unknown book'),
+                'book_authors': meta['authors'] if meta else '',
+                'book_format': citation.book_format,
+                'quote': citation.quote,
+                'comment': citation.comment,
+                'cfi_range': citation.cfi_range,
+                'chapter_label': citation.chapter_label,
+                'page': citation.page,
+                'paragraph': citation.paragraph,
+                'color': citation.color,
+                'created_at': citation.created_at.isoformat() if citation.created_at else None,
+            })
+        payload.append({
+            'id': note.id,
+            'title': note.title,
+            'body': note.body,
+            'tags': note.tags,
+            'is_public': bool(note.is_public),
+            'created_at': note.created_at.isoformat() if note.created_at else None,
+            'updated_at': note.updated_at.isoformat() if note.updated_at else None,
+            'citations': citations,
+        })
+    return payload
+
+
+@notes.route("/notes/export")
+@user_login_required
+def notes_export():
+    fmt = (request.args.get('fmt') or 'md').lower()
+    if fmt not in ('md', 'json'):
+        return _json_error(_('Unknown export format'))
+    query, _filters = _query_notes(request.args, force_scope='mine')
+    notes = query.all()
+    filename = 'cwa-notes-{}.{}'.format(datetime.now(timezone.utc).strftime('%Y%m%d'), fmt)
+
+    if fmt == 'json':
+        response = jsonify(_export_json(notes))
+        response.headers['Content-Type'] = 'application/json; charset=utf-8'
+    else:
+        response = Response(_export_markdown(notes), mimetype='text/markdown')
+    response.headers['Content-Disposition'] = 'attachment; filename="{}"'.format(filename)
+    return response
