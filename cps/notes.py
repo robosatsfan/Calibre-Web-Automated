@@ -16,6 +16,7 @@ from . import calibre_db, logger, ub
 from .cw_login import current_user
 from .notes_utils import (ALLOWED_FORMATS, MAX_BODY, MAX_COMMENT, MAX_QUOTE, MAX_TITLE,
                           clean_note_text, normalize_tags, render_markdown, valid_cfi)
+from .pagination import Pagination
 from .render_template import render_title_template
 from .usermanagement import user_login_required
 
@@ -132,6 +133,59 @@ def _json_error(message, status=400):
     return jsonify({"error": message}), status
 
 
+NOTES_PER_PAGE = 25
+
+
+def _query_notes(args):
+    """Build the filtered Notes query shared by the list page and the export."""
+    query = ub.session.query(ub.Note).outerjoin(ub.NoteCitation).distinct()
+
+    scope = (args.get('scope') or 'mine').lower()
+    if scope == 'shared':
+        query = query.filter(ub.Note.is_public.is_(True),
+                             ub.Note.user_id != current_user.id)
+    else:
+        scope = 'mine'
+        query = query.filter(ub.Note.user_id == current_user.id)
+
+    term = (args.get('q') or '').strip()
+    if term:
+        like = '%{}%'.format(term)
+        query = query.filter(or_(ub.Note.title.ilike(like),
+                                 ub.Note.body.ilike(like),
+                                 ub.Note.tags.ilike(like),
+                                 ub.NoteCitation.quote.ilike(like)))
+
+    book_id = args.get('book_id', type=int)
+    if book_id:
+        query = query.filter(ub.NoteCitation.book_id == book_id)
+    else:
+        book_id = None
+
+    tag = normalize_tags(args.get('tag') or '')
+    if tag:
+        query = query.filter(or_(ub.Note.tags == tag,
+                                 ub.Note.tags.like(tag + ',%'),
+                                 ub.Note.tags.like('%,' + tag),
+                                 ub.Note.tags.like('%,' + tag + ',%')))
+
+    note_type = (args.get('type') or '').lower()
+    if note_type == 'free':
+        query = query.filter(~ub.Note.citations.any())
+    elif note_type == 'cited':
+        query = query.filter(ub.Note.citations.any())
+    else:
+        note_type = ''
+
+    return query.order_by(ub.Note.updated_at.desc()), {
+        'scope': scope,
+        'q': term,
+        'tag': tag,
+        'type': note_type,
+        'book_id': book_id,
+    }
+
+
 def _values_from_form():
     return {
         'title': clean_note_text(request.form.get('title'), MAX_TITLE),
@@ -160,10 +214,25 @@ def _apply_note_form(note):
 @notes.route("/notes")
 @user_login_required
 def notes_list():
-    own_notes = ub.session.query(ub.Note).filter(ub.Note.user_id == current_user.id) \
-        .order_by(ub.Note.updated_at.desc()).limit(100).all()
+    page_number = request.args.get('page', 1, type=int)
+    if page_number < 1:
+        page_number = 1
+    query, filters = _query_notes(request.args)
+    total = query.count()
+    pagination = Pagination(page_number, NOTES_PER_PAGE, total)
+    own_notes = query.offset((page_number - 1) * NOTES_PER_PAGE) \
+        .limit(NOTES_PER_PAGE).all()
+
+    book_filter_title = None
+    if filters['book_id']:
+        meta = _book_meta(filters['book_id'])
+        book_filter_title = meta['title'] if meta else _('Unknown book')
+
     return render_title_template('notes_list.html',
                                  notes=own_notes,
+                                 pagination=pagination,
+                                 filters=filters,
+                                 book_filter_title=book_filter_title,
                                  title=_("Notes"),
                                  page="notes")
 

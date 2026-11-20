@@ -13,6 +13,45 @@
     </a>
   </div>
 
+  <div class="notes-tabs">
+    <a class="btn btn-sm {% if filters.scope == 'mine' %}btn-primary{% else %}btn-default{% endif %}"
+       href="{{ url_for('notes.notes_list', scope='mine', q=filters.q or None, tag=filters.tag or None,
+                        type=filters.type or None, book_id=filters.book_id) }}">{{ _('Mine') }}</a>
+    <a class="btn btn-sm {% if filters.scope == 'shared' %}btn-primary{% else %}btn-default{% endif %}"
+       href="{{ url_for('notes.notes_list', scope='shared', q=filters.q or None, tag=filters.tag or None,
+                        type=filters.type or None, book_id=filters.book_id) }}">{{ _('Shared') }}</a>
+  </div>
+
+  <form class="notes-filter" method="get" action="{{ url_for('notes.notes_list') }}">
+    <input type="hidden" name="scope" value="{{ filters.scope }}">
+    {% if filters.book_id %}
+      <input type="hidden" name="book_id" value="{{ filters.book_id }}">
+    {% endif %}
+    <input type="search" class="form-control input-sm" name="q" value="{{ filters.q }}"
+           placeholder="{{ _('Search notes and quotes') }}">
+    <input type="text" class="form-control input-sm" name="tag" value="{{ filters.tag }}"
+           placeholder="{{ _('Tag') }}">
+    <select class="form-control input-sm" name="type">
+      <option value="" {% if not filters.type %}selected{% endif %}>{{ _('All notes') }}</option>
+      <option value="free" {% if filters.type == 'free' %}selected{% endif %}>{{ _('Without quotes') }}</option>
+      <option value="cited" {% if filters.type == 'cited' %}selected{% endif %}>{{ _('With quotes') }}</option>
+    </select>
+    <button type="submit" class="btn btn-sm btn-default">{{ _('Filter') }}</button>
+    {% if filters.q or filters.tag or filters.type or filters.book_id %}
+      <a class="btn btn-sm btn-link" href="{{ url_for('notes.notes_list', scope=filters.scope) }}">{{ _('Clear') }}</a>
+    {% endif %}
+  </form>
+
+  {% if filters.book_id %}
+    <div class="notes-book-chip">
+      <span class="note-pill">{{ _('Book') }}: {{ book_filter_title }}</span>
+      <a href="{{ url_for('notes.notes_list', scope=filters.scope, q=filters.q or None, tag=filters.tag or None,
+                          type=filters.type or None) }}" title="{{ _('Remove book filter') }}">
+        <span class="glyphicon glyphicon-remove"></span>
+      </a>
+    </div>
+  {% endif %}
+
   {% if notes %}
     <div class="notes-grid">
       {% for note in notes %}
@@ -39,10 +78,39 @@
         </article>
       {% endfor %}
     </div>
+
+    {% if pagination.pages > 1 %}
+      <div class="notes-pagination">
+        <ul class="pagination">
+          {% if pagination.has_prev %}
+            <li><a href="{{ (pagination.page - 1)|url_for_other_page }}">&laquo;</a></li>
+          {% endif %}
+          {% for number in pagination.iter_pages() %}
+            {% if number %}
+              <li class="{% if number == pagination.page %}active{% endif %}">
+                <a href="{{ number|url_for_other_page }}">{{ number }}</a>
+              </li>
+            {% else %}
+              <li class="disabled"><span>&hellip;</span></li>
+            {% endif %}
+          {% endfor %}
+          {% if pagination.has_next %}
+            <li><a href="{{ (pagination.page + 1)|url_for_other_page }}">&raquo;</a></li>
+          {% endif %}
+        </ul>
+      </div>
+    {% endif %}
   {% else %}
     <div class="notes-empty">
-      <p>{{ _('You have no notes yet.') }}</p>
-      <a class="btn btn-primary" href="{{ url_for('notes.note_create') }}">{{ _('Create your first note') }}</a>
+      {% if filters.q or filters.tag or filters.type or filters.book_id %}
+        <p>{{ _('No notes match these filters.') }}</p>
+        <a class="btn btn-default" href="{{ url_for('notes.notes_list', scope=filters.scope) }}">{{ _('Clear filters') }}</a>
+      {% elif filters.scope == 'shared' %}
+        <p>{{ _('No shared notes from other users yet.') }}</p>
+      {% else %}
+        <p>{{ _('You have no notes yet.') }}</p>
+        <a class="btn btn-primary" href="{{ url_for('notes.note_create') }}">{{ _('Create your first note') }}</a>
+      {% endif %}
     </div>
   {% endif %}
 </div>
