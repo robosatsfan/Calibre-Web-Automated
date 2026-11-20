@@ -106,8 +106,12 @@ def _citation_dict(citation):
     }
 
 
-def _citation_views(note):
-    """Citations of ``note`` together with resolved book data (owner edit view)."""
+def _citation_views(note, is_owner=True):
+    """Citations of ``note`` together with resolved book data.
+
+    Quotes from books the viewer cannot access are marked ``visible=False`` so shared
+    notes never expose them.
+    """
     views = []
     for citation in note.citations:
         meta = _book_meta(citation.book_id)
@@ -116,6 +120,7 @@ def _citation_views(note):
             'book_meta': meta,
             'book_title': meta['title'] if meta else None,
             'available': meta is not None and (citation.book_format or '').upper() in meta['formats'],
+            'visible': is_owner or _book_accessible(citation.book_id),
         })
     return views
 
@@ -264,11 +269,12 @@ def note_create():
 @user_login_required
 def note_view(note_id):
     note = _visible_note_or_404(note_id)
+    is_owner = note.user_id == current_user.id
     return render_title_template('note_view.html',
                                  note=note,
-                                 citation_views=_citation_views(note),
+                                 citation_views=_citation_views(note, is_owner=is_owner),
                                  rendered_body=render_markdown(note.body),
-                                 is_owner=(note.user_id == current_user.id),
+                                 is_owner=is_owner,
                                  title=note.title or _("Note"),
                                  page="notes")
 

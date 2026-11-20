@@ -54,11 +54,15 @@
         {% for item in citation_views %}
           {% set citation = item.citation %}
           <li class="note-quote note-quote-{{ citation.color }}">
-            {% if citation.quote %}
-              <blockquote>{{ citation.quote }}</blockquote>
-            {% endif %}
-            {% if citation.comment %}
-              <p class="note-quote-comment">{{ citation.comment }}</p>
+            {% if item.visible %}
+              {% if citation.quote %}
+                <blockquote>{{ citation.quote }}</blockquote>
+              {% endif %}
+              {% if citation.comment %}
+                <p class="note-quote-comment">{{ citation.comment }}</p>
+              {% endif %}
+            {% else %}
+              <p class="note-muted">{{ _('Quote from a book you cannot access') }}</p>
             {% endif %}
             <div class="note-quote-meta">
               {% if item.book_title %}
