@@ -49,14 +49,37 @@
 
   <div class="note-quotes">
     <h3>{{ _('Quotes') }}</h3>
-    {% if note.citations %}
+    {% if citation_views %}
       <ul class="note-quote-list">
-        {% for citation in note.citations %}
+        {% for item in citation_views %}
+          {% set citation = item.citation %}
           <li class="note-quote note-quote-{{ citation.color }}">
-            <blockquote>{{ citation.quote }}</blockquote>
+            {% if citation.quote %}
+              <blockquote>{{ citation.quote }}</blockquote>
+            {% endif %}
             {% if citation.comment %}
               <p class="note-quote-comment">{{ citation.comment }}</p>
             {% endif %}
+            <div class="note-quote-meta">
+              {% if item.book_title %}
+                <span class="note-quote-book">{{ item.book_title }}</span>
+              {% else %}
+                <span class="note-quote-book note-muted">{{ _('Book no longer available') }}</span>
+              {% endif %}
+              {% if citation.chapter_label %}
+                <span class="note-quote-loc">{{ citation.chapter_label }}</span>
+              {% endif %}
+              {% if citation.page %}
+                <span class="note-quote-loc">
+                  {{ _('Page') }} {{ citation.page }}{% if citation.paragraph %} &middot; {{ _('Paragraph') }} {{ citation.paragraph }}{% endif %}
+                </span>
+              {% endif %}
+              {% if item.available %}
+                <a class="btn btn-xs btn-default" href="{{ url_for('notes.citation_open', citation_id=citation.id) }}">
+                  {{ _('Open in book') }}
+                </a>
+              {% endif %}
+            </div>
           </li>
         {% endfor %}
       </ul>

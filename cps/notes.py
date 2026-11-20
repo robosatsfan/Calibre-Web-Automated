@@ -8,12 +8,14 @@
 
 from datetime import datetime, timezone
 
-from flask import Blueprint, abort, flash, jsonify, redirect, request, url_for
+from flask import Blueprint, abort, flash, g, jsonify, redirect, request, url_for
 from flask_babel import gettext as _
+from sqlalchemy import or_
 
-from . import logger, ub
+from . import calibre_db, logger, ub
 from .cw_login import current_user
-from .notes_utils import MAX_BODY, MAX_TITLE, clean_note_text, normalize_tags, render_markdown
+from .notes_utils import (ALLOWED_FORMATS, MAX_BODY, MAX_COMMENT, MAX_QUOTE, MAX_TITLE,
+                          clean_note_text, normalize_tags, render_markdown, valid_cfi)
 from .render_template import render_title_template
 from .usermanagement import user_login_required
 
@@ -43,6 +45,91 @@ def _visible_note_or_404(note_id):
 
 def _touch_note(note):
     note.updated_at = datetime.now(timezone.utc)
+
+
+def _book_meta(book_id):
+    """Return {'id', 'title', 'authors', 'formats'} for an accessible book, else None (cached per request)."""
+    try:
+        book_id = int(book_id)
+    except (TypeError, ValueError):
+        return None
+    cache = g.get('cwa_note_books')
+    if cache is None:
+        cache = {}
+        g.cwa_note_books = cache
+    if book_id in cache:
+        return cache[book_id]
+
+    meta = None
+    try:
+        book = calibre_db.get_filtered_book(book_id)
+    except Exception as ex:
+        log.debug("Notes: could not load book %s: %s", book_id, ex)
+        book = None
+    if book is not None:
+        try:
+            authors = ', '.join(a.name.replace('|', ',') for a in book.authors)
+        except Exception:
+            authors = ''
+        formats = set()
+        for data in getattr(book, 'data', []) or []:
+            if data.format:
+                formats.add(data.format.upper())
+        meta = {'id': book_id, 'title': book.title or '', 'authors': authors, 'formats': formats}
+    cache[book_id] = meta
+    return meta
+
+
+def _book_accessible(book_id):
+    return _book_meta(book_id) is not None
+
+
+def _citation_dict(citation):
+    meta = _book_meta(citation.book_id)
+    return {
+        'id': citation.id,
+        'note_id': citation.note_id,
+        'note_title': citation.note.title if citation.note else '',
+        'book_id': citation.book_id,
+        'book_title': meta['title'] if meta else _('Unknown book'),
+        'book_format': citation.book_format,
+        'quote': citation.quote,
+        'comment': citation.comment,
+        'cfi_range': citation.cfi_range,
+        'chapter_label': citation.chapter_label,
+        'page': citation.page,
+        'paragraph': citation.paragraph,
+        'color': citation.color,
+        'created_at': citation.created_at.isoformat() if citation.created_at else None,
+        'open_url': url_for('notes.citation_open', citation_id=citation.id),
+    }
+
+
+def _citation_views(note):
+    """Citations of ``note`` together with resolved book data (owner edit view)."""
+    views = []
+    for citation in note.citations:
+        meta = _book_meta(citation.book_id)
+        views.append({
+            'citation': citation,
+            'book_meta': meta,
+            'book_title': meta['title'] if meta else None,
+            'available': meta is not None and (citation.book_format or '').upper() in meta['formats'],
+        })
+    return views
+
+
+def _own_citation_or_404(citation_id):
+    citation = ub.session.query(ub.NoteCitation).filter(
+        ub.NoteCitation.id == citation_id,
+        ub.NoteCitation.user_id == current_user.id).first()
+    if citation is None:
+        abort(404)
+    return citation
+
+
+def _json_error(message, status=400):
+    return jsonify({"error": message}), status
 
 
 def _values_from_form():
@@ -110,6 +197,7 @@ def note_view(note_id):
     note = _visible_note_or_404(note_id)
     return render_title_template('note_view.html',
                                  note=note,
+                                 citation_views=_citation_views(note),
                                  rendered_body=render_markdown(note.body),
                                  is_owner=(note.user_id == current_user.id),
                                  title=note.title or _("Note"),
@@ -127,6 +215,7 @@ def note_edit(note_id):
             return render_title_template('note_edit.html',
                                          note=note,
                                          values=_values_from_form(),
+                                         citation_views=_citation_views(note),
                                          title=note.title or _("Note"),
                                          page="notes")
         _touch_note(note)
@@ -135,6 +224,7 @@ def note_edit(note_id):
     return render_title_template('note_edit.html',
                                  note=note,
                                  values=None,
+                                 citation_views=_citation_views(note),
                                  title=note.title or _("Note"),
                                  page="notes")
 
@@ -161,3 +251,197 @@ def notes_preview():
     if text is None:
         text = request.form.get('body', '')
     return jsonify({"html": render_markdown(clean_note_text(text, MAX_BODY))})
+
+
+# ---------------------------------------------------------------------------
+# Citations: jump route
+# ---------------------------------------------------------------------------
+
+@notes.route("/notes/citation/<int:citation_id>/open")
+@user_login_required
+def citation_open(citation_id):
+    citation = ub.session.query(ub.NoteCitation).filter(ub.NoteCitation.id == citation_id).first()
+    if citation is None:
+        abort(404)
+    note = citation.note
+    if note is None or (note.user_id != current_user.id and not note.is_public):
+        abort(404)
+    meta = _book_meta(citation.book_id)
+    if meta is None:
+        flash(_('That book is no longer available'), category="error")
+        return redirect(url_for('notes.note_view', note_id=note.id))
+    book_format = (citation.book_format or '').upper()
+    if book_format not in meta['formats']:
+        flash(_('That book format is no longer available'), category="error")
+        return redirect(url_for('notes.note_view', note_id=note.id))
+
+    if book_format in ('EPUB', 'KEPUB'):
+        kwargs = {'book_id': citation.book_id, 'book_format': book_format.lower(),
+                  'citation': citation.id}
+        if citation.cfi_range:
+            kwargs['cfi'] = citation.cfi_range
+        return redirect(url_for('web.read_book', **kwargs))
+    return redirect(url_for('web.read_book', book_id=citation.book_id, book_format='pdf')
+                    + '#page=' + str(citation.page or 1))
+
+
+# ---------------------------------------------------------------------------
+# Citations: JSON API
+# ---------------------------------------------------------------------------
+
+@notes.route("/ajax/notes/book/<int:book_id>")
+@user_login_required
+def notes_book_api(book_id):
+    citations = ub.session.query(ub.NoteCitation).join(ub.Note) \
+        .filter(ub.NoteCitation.user_id == current_user.id,
+                ub.NoteCitation.book_id == book_id,
+                ub.Note.user_id == current_user.id) \
+        .order_by(ub.NoteCitation.created_at.desc()).all()
+    return jsonify([_citation_dict(citation) for citation in citations])
+
+
+@notes.route("/ajax/notes/mine")
+@user_login_required
+def notes_mine():
+    query = ub.session.query(ub.Note).filter(ub.Note.user_id == current_user.id)
+    term = (request.args.get('q') or '').strip()
+    if term:
+        like = '%{}%'.format(term)
+        query = query.filter(or_(ub.Note.title.ilike(like),
+                                 ub.Note.body.ilike(like),
+                                 ub.Note.tags.ilike(like)))
+    own_notes = query.order_by(ub.Note.updated_at.desc()).limit(20).all()
+    return jsonify([{'id': note.id, 'title': note.title} for note in own_notes])
+
+
+def _validated_citation_payload(payload):
+    """Return (values, error_message). ``values`` is a dict of cleaned citation fields."""
+    try:
+        book_id = int(payload.get('book_id'))
+    except (TypeError, ValueError):
+        return None, _('Invalid book')
+    if not _book_accessible(book_id):
+        return None, _('That book is no longer available')
+
+    book_format = str(payload.get('book_format') or '').upper()
+    if book_format not in ALLOWED_FORMATS:
+        return None, _('Invalid book format')
+
+    color = payload.get('color') or 'yellow'
+    if color not in ub.NoteCitation.COLORS:
+        return None, _('Invalid color')
+
+    quote = clean_note_text(payload.get('quote'), MAX_QUOTE).strip()
+    comment = clean_note_text(payload.get('comment'), MAX_COMMENT).strip()
+    if not quote and not comment:
+        return None, _('A quote or a comment is required')
+
+    cfi_range = None
+    page = None
+    paragraph = None
+    if book_format in ('EPUB', 'KEPUB'):
+        cfi_range = payload.get('cfi_range')
+        if not valid_cfi(cfi_range):
+            return None, _('Invalid EPUB location')
+    else:
+        try:
+            page = int(payload.get('page'))
+        except (TypeError, ValueError):
+            return None, _('A valid page number is required')
+        if page < 1:
+            return None, _('A valid page number is required')
+        if payload.get('paragraph') not in (None, ''):
+            try:
+                paragraph = int(payload.get('paragraph'))
+            except (TypeError, ValueError):
+                return None, _('Invalid paragraph number')
+            if paragraph < 1:
+                return None, _('Invalid paragraph number')
+
+    return {
+        'book_id': book_id,
+        'book_format': book_format,
+        'color': color,
+        'quote': quote,
+        'comment': comment,
+        'cfi_range': cfi_range,
+        'page': page,
+        'paragraph': paragraph,
+        'chapter_label': clean_note_text(payload.get('chapter_label'), MAX_TITLE).strip() or None,
+    }, None
+
+
+@notes.route("/ajax/notes/citation", methods=["POST"])
+@user_login_required
+def citation_create():
+    payload = request.get_json(silent=True) or {}
+    values, error = _validated_citation_payload(payload)
+    if error:
+        log.debug("Notes: rejected citation: %s", error)
+        return _json_error(error)
+
+    note_id = payload.get('note_id')
+    if note_id not in (None, '', 0, '0'):
+        try:
+            note = ub.session.query(ub.Note).filter(ub.Note.id == int(note_id),
+                                                    ub.Note.user_id == current_user.id).first()
+        except (TypeError, ValueError):
+            note = None
+        if note is None:
+            return _json_error(_('Note not found'), 404)
+    else:
+        title = clean_note_text(payload.get('note_title'), MAX_TITLE).strip()
+        if not title:
+            book_title = _book_meta(values['book_id'])['title'] or _('Unknown book')
+            first_words = values['quote'][:60].strip()
+            title = '{} – {}'.format(book_title, first_words) if first_words else book_title
+            title = title.strip() or _('Note')
+        note = ub.Note(user_id=current_user.id, title=title[:MAX_TITLE], body='', tags='',
+                       is_public=False)
+        ub.session.add(note)
+
+    citation = ub.NoteCitation(note=note,
+                               user_id=current_user.id,
+                               book_id=values['book_id'],
+                               book_format=values['book_format'],
+                               quote=values['quote'],
+                               comment=values['comment'],
+                               cfi_range=values['cfi_range'],
+                               chapter_label=values['chapter_label'],
+                               page=values['page'],
+                               paragraph=values['paragraph'],
+                               color=values['color'])
+    ub.session.add(citation)
+    _touch_note(note)
+    ub.session_commit()
+    return jsonify(_citation_dict(citation)), 201
+
+
+@notes.route("/ajax/notes/citation/<int:citation_id>/update", methods=["POST"])
+@user_login_required
+def citation_update(citation_id):
+    citation = _own_citation_or_404(citation_id)
+    payload = request.get_json(silent=True) or {}
+    if 'color' in payload:
+        color = payload.get('color')
+        if color not in ub.NoteCitation.COLORS:
+            return _json_error(_('Invalid color'))
+        citation.color = color
+    if 'comment' in payload:
+        citation.comment = clean_note_text(payload.get('comment'), MAX_COMMENT).strip()
+    if citation.note is not None:
+        _touch_note(citation.note)
+    ub.session_commit()
+    return jsonify(_citation_dict(citation))
+
+
+@notes.route("/ajax/notes/citation/<int:citation_id>/delete", methods=["POST"])
+@user_login_required
+def citation_delete(citation_id):
+    citation = _own_citation_or_404(citation_id)
+    note = citation.note
+    ub.session.delete(citation)
+    if note is not None:
+        _touch_note(note)
+    ub.session_commit()
+    return '', 204

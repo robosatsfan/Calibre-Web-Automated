@@ -80,5 +80,87 @@
         });
     }
 
+    function initCitations() {
+        var container = document.querySelector("[data-cwa-citations]");
+        if (!container) {
+            return;
+        }
+        var errorText = container.getAttribute("data-error-text") || "";
+        var csrf = getCsrfToken(container);
+
+        function postJson(url, body) {
+            return fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrf
+                },
+                body: JSON.stringify(body || {})
+            });
+        }
+
+        function applyColor(item, color) {
+            item.className = item.className.replace(/note-quote-\w+/g, "").trim();
+            item.className += " note-quote-" + color;
+        }
+
+        Array.prototype.forEach.call(container.querySelectorAll("[data-cwa-citation]"), function (item) {
+            var saveButton = item.querySelector("[data-cwa-citation-save]");
+            var deleteButton = item.querySelector("[data-cwa-citation-delete]");
+            var colorSelect = item.querySelector("[data-cwa-citation-color]");
+            var commentField = item.querySelector("[data-cwa-citation-comment]");
+            var status = item.querySelector("[data-cwa-citation-status]");
+
+            if (saveButton) {
+                saveButton.addEventListener("click", function () {
+                    postJson(item.getAttribute("data-update-url"), {
+                        color: colorSelect ? colorSelect.value : undefined,
+                        comment: commentField ? commentField.value : undefined
+                    }).then(function (response) {
+                        if (!response.ok) {
+                            throw new Error("update failed");
+                        }
+                        return response.json();
+                    }).then(function (data) {
+                        if (colorSelect && data.color) {
+                            applyColor(item, data.color);
+                        }
+                        if (status) {
+                            status.textContent = "";
+                        }
+                    }).catch(function () {
+                        if (status) {
+                            status.textContent = errorText;
+                        }
+                    });
+                });
+            }
+
+            if (deleteButton) {
+                deleteButton.addEventListener("click", function () {
+                    var question = deleteButton.getAttribute("data-confirm") || "";
+                    if (question && !window.confirm(question)) {
+                        return;
+                    }
+                    postJson(item.getAttribute("data-delete-url"), {}).then(function (response) {
+                        if (response.status !== 204 && !response.ok) {
+                            throw new Error("delete failed");
+                        }
+                        var list = item.parentNode;
+                        item.parentNode.removeChild(item);
+                        if (list && !list.querySelector("[data-cwa-citation]")) {
+                            container.parentNode.removeChild(container);
+                        }
+                    }).catch(function () {
+                        if (status) {
+                            status.textContent = errorText;
+                        }
+                    });
+                });
+            }
+        });
+    }
+
     document.addEventListener("DOMContentLoaded", initEditor);
+    document.addEventListener("DOMContentLoaded", initCitations);
 })();

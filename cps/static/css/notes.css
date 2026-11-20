@@ -176,6 +176,58 @@
     opacity: 0.9;
 }
 
+.note-quote-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    font-size: 0.85em;
+    margin-bottom: 0.5rem;
+}
+
+.note-quote-book {
+    font-style: italic;
+}
+
+.note-quote-loc {
+    opacity: 0.75;
+}
+
+.note-muted {
+    opacity: 0.6;
+}
+
+.note-quote-edit {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.note-quote-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.85em;
+    font-weight: normal;
+    margin: 0;
+}
+
+.note-quote-field-comment {
+    flex: 1 1 240px;
+}
+
+.note-quote-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.note-quote-status {
+    font-size: 0.85em;
+}
+
 @media (max-width: 480px) {
     .notes-grid {
         grid-template-columns: 1fr;
