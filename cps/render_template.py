@@ -138,6 +138,11 @@ def get_sidebar_config(kwargs=None):
             {"glyph": "glyphicon-copy", "text": _('Duplicates'), "link": 'duplicates.show_duplicates', "id": "duplicates",
              "visibility": constants.SIDEBAR_DUPLICATES, 'public': (not current_user.is_anonymous), "page": "duplicates",
              "show_text": _('Show Duplicate Books'), "config_show": content})
+    sidebar.append({"glyph": "glyphicon-comment", "text": _('Notes'),
+                    "link": 'notes.notes_list', "id": "notes",
+                    "visibility": constants.SIDEBAR_NOTES,
+                    'public': (not current_user.is_anonymous), "page": "notes",
+                    "show_text": _('Show Notes'), "config_show": content})
     g.shelves_access = ub.session.query(ub.Shelf).filter(
         or_(ub.Shelf.is_public == 1, ub.Shelf.user_id == current_user.id)).order_by(ub.Shelf.name).all()
 

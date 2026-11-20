@@ -1,0 +1,49 @@
+{% extends "layout.html" %}
+
+{% block header %}
+<link href="{{ url_for('static', filename='css/notes.css') }}" rel="stylesheet" media="screen">
+{% endblock %}
+
+{% block body %}
+<div class="discover notes-page">
+  <div class="notes-toolbar">
+    <h2>{{ _('Notes') }}</h2>
+    <a class="btn btn-primary" href="{{ url_for('notes.note_create') }}">
+      <span class="glyphicon glyphicon-plus"></span> {{ _('New note') }}
+    </a>
+  </div>
+
+  {% if notes %}
+    <div class="notes-grid">
+      {% for note in notes %}
+        <article class="note-card">
+          <h3 class="note-card-title">
+            <a href="{{ url_for('notes.note_view', note_id=note.id) }}">{{ note.title }}</a>
+          </h3>
+          {% if note.body %}
+            <p class="note-card-excerpt">{{ note.body|truncate(200) }}</p>
+          {% endif %}
+          <div class="note-card-meta">
+            {% if note.tags %}
+              {% for tag in note.tags.split(',') if tag %}
+                <span class="note-pill">{{ tag }}</span>
+              {% endfor %}
+            {% endif %}
+            {% if note.is_public %}
+              <span class="note-pill note-pill-shared">{{ _('Shared') }}</span>
+            {% endif %}
+            {% if note.updated_at %}
+              <span class="note-date">{{ note.updated_at.strftime('%Y-%m-%d') }}</span>
+            {% endif %}
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="notes-empty">
+      <p>{{ _('You have no notes yet.') }}</p>
+      <a class="btn btn-primary" href="{{ url_for('notes.note_create') }}">{{ _('Create your first note') }}</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

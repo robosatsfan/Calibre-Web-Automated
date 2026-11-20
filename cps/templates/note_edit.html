@@ -1,0 +1,97 @@
+{% extends "layout.html" %}
+
+{% block header %}
+<link href="{{ url_for('static', filename='css/notes.css') }}" rel="stylesheet" media="screen">
+{% endblock %}
+
+{% block body %}
+{% set v = values if values is not none else {
+    'title': note.title if note else '',
+    'body': note.body if note else '',
+    'tags': note.tags if note else '',
+    'shared': note.is_public if note else False
+} %}
+<div class="discover notes-page">
+  <div class="notes-toolbar">
+    <h2>{% if note %}{{ _('Edit note') }}{% else %}{{ _('New note') }}{% endif %}</h2>
+  </div>
+
+  <form method="post"
+        id="note-form"
+        class="note-editor"
+        data-cwa-note-form
+        data-preview-url="{{ url_for('notes.notes_preview') }}"
+        data-preview-error="{{ _('Preview could not be generated.') }}"
+        data-preview-empty="{{ _('Nothing to preview yet.') }}"
+        action="{% if note %}{{ url_for('notes.note_edit', note_id=note.id) }}{% else %}{{ url_for('notes.note_create') }}{% endif %}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="form-group">
+      <label for="note-title">{{ _('Title') }}</label>
+      <input type="text" class="form-control" id="note-title" name="title"
+             maxlength="255" value="{{ v['title'] }}" required>
+    </div>
+
+    <div class="form-group">
+      <div class="note-editor-head">
+        <label for="note-body">{{ _('Note') }}</label>
+        <div class="btn-group btn-group-xs" role="group">
+          <button type="button" class="btn btn-default active" data-cwa-mode="write">
+            {{ _('Write') }}
+          </button>
+          <button type="button" class="btn btn-default" data-cwa-mode="preview">
+            {{ _('Preview') }}
+          </button>
+        </div>
+      </div>
+      <textarea class="form-control" id="note-body" name="body" rows="14"
+                maxlength="50000">{{ v['body'] }}</textarea>
+      <div class="note-preview" data-cwa-preview-pane hidden></div>
+      <p class="help-block">{{ _('Markdown supported') }}</p>
+    </div>
+
+    <div class="form-group">
+      <label for="note-tags">{{ _('Tags') }}</label>
+      <input type="text" class="form-control" id="note-tags" name="tags"
+             value="{{ v['tags'] }}" placeholder="{{ _('tag1, tag2') }}">
+      <p class="help-block">{{ _('Separate tags with commas.') }}</p>
+    </div>
+
+    <div class="checkbox">
+      <label>
+        <input type="checkbox" name="shared" value="1" {% if v['shared'] %}checked{% endif %}>
+        {{ _('Share this note with other users (read only)') }}
+      </label>
+    </div>
+
+    <div class="notes-actions">
+      <button type="submit" class="btn btn-primary">{{ _('Save') }}</button>
+      <a class="btn btn-default"
+         href="{% if note %}{{ url_for('notes.note_view', note_id=note.id) }}{% else %}{{ url_for('notes.notes_list') }}{% endif %}">
+        {{ _('Cancel') }}
+      </a>
+    </div>
+  </form>
+
+  {% if note and note.citations %}
+    <div class="note-quotes">
+      <h3>{{ _('Quotes') }}</h3>
+      <ul class="note-quote-list">
+        {% for citation in note.citations %}
+          <li class="note-quote note-quote-{{ citation.color }}">
+            <blockquote>{{ citation.quote }}</blockquote>
+            {% if citation.comment %}
+              <p class="note-quote-comment">{{ citation.comment }}</p>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block js %}
+{{ super() }}
+<script src="{{ url_for('static', filename='js/notes.js') }}"></script>
+{% endblock %}

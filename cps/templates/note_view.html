@@ -1,0 +1,90 @@
+{% extends "layout.html" %}
+
+{% block header %}
+<link href="{{ url_for('static', filename='css/notes.css') }}" rel="stylesheet" media="screen">
+{% endblock %}
+
+{% block body %}
+<div class="discover notes-page">
+  <div class="notes-toolbar">
+    <h2>{{ note.title }}</h2>
+    {% if is_owner %}
+      <div class="notes-actions">
+        <a class="btn btn-default" href="{{ url_for('notes.note_edit', note_id=note.id) }}">
+          <span class="glyphicon glyphicon-pencil"></span> {{ _('Edit') }}
+        </a>
+        <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#noteDeleteModal">
+          <span class="glyphicon glyphicon-trash"></span> {{ _('Delete') }}
+        </button>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="note-meta-bar">
+    {% if note.tags %}
+      {% for tag in note.tags.split(',') if tag %}
+        <span class="note-pill">{{ tag }}</span>
+      {% endfor %}
+    {% endif %}
+    {% if note.is_public %}
+      <span class="note-pill note-pill-shared">{{ _('Shared') }}</span>
+    {% else %}
+      <span class="note-pill">{{ _('Private') }}</span>
+    {% endif %}
+    {% if note.created_at %}
+      <span class="note-date">{{ _('Created') }}: {{ note.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+    {% endif %}
+    {% if note.updated_at %}
+      <span class="note-date">{{ _('Updated') }}: {{ note.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+    {% endif %}
+  </div>
+
+  <div class="note-body">
+    {% if rendered_body %}
+      {{ rendered_body|safe }}
+    {% else %}
+      <p class="note-empty-text">{{ _('This note has no text yet.') }}</p>
+    {% endif %}
+  </div>
+
+  <div class="note-quotes">
+    <h3>{{ _('Quotes') }}</h3>
+    {% if note.citations %}
+      <ul class="note-quote-list">
+        {% for citation in note.citations %}
+          <li class="note-quote note-quote-{{ citation.color }}">
+            <blockquote>{{ citation.quote }}</blockquote>
+            {% if citation.comment %}
+              <p class="note-quote-comment">{{ citation.comment }}</p>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="note-empty-text">{{ _('No quotes in this note yet.') }}</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block modal %}
+{% if is_owner %}
+<div class="modal fade" id="noteDeleteModal" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-center">
+        <span>{{ _('Delete note') }}</span>
+      </div>
+      <div class="modal-body text-center">
+        <p>{{ _('Delete this note and all its quotes?') }}</p>
+        <form method="post" action="{{ url_for('notes.note_delete', note_id=note.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-danger">{{ _('Delete') }}</button>
+          <button type="button" class="btn btn-default" data-dismiss="modal">{{ _('Cancel') }}</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
