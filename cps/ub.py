@@ -696,6 +696,42 @@ class KoboAnnotationSync(Base):
         return f'<KoboAnnotationSync annotation_id={self.annotation_id} book_id={self.book_id}>'
 
 
+class Note(Base):
+    __tablename__ = 'note'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
+    title = Column(String, nullable=False, default='')
+    body = Column(String, nullable=False, default='')          # Markdown source
+    tags = Column(String, nullable=False, default='')          # normalized "tag1,tag2"
+    is_public = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+                        onupdate=lambda: datetime.now(timezone.utc))
+    citations = relationship("NoteCitation", backref="note", cascade="all, delete-orphan",
+                             order_by="NoteCitation.created_at")
+    __table_args__ = (Index('ix_note_user_updated', 'user_id', 'updated_at'),)
+
+
+class NoteCitation(Base):
+    __tablename__ = 'note_citation'
+    COLORS = ('yellow', 'green', 'blue', 'pink')
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    note_id = Column(Integer, ForeignKey('note.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)  # denormalized for reader queries
+    book_id = Column(Integer, nullable=False)                         # calibre metadata.db id; no cross-DB FK
+    book_format = Column(String, nullable=False)                      # 'EPUB' | 'KEPUB' | 'PDF'
+    quote = Column(String, nullable=False, default='')
+    comment = Column(String, nullable=False, default='')
+    cfi_range = Column(String, nullable=True)        # EPUB/KEPUB only
+    chapter_label = Column(String, nullable=True)    # EPUB, display only
+    page = Column(Integer, nullable=True)            # PDF only
+    paragraph = Column(Integer, nullable=True)       # PDF only, optional, user-entered
+    color = Column(String, nullable=False, default='yellow')
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    __table_args__ = (Index('ix_note_citation_user_book', 'user_id', 'book_id'),)
+
+
 class HardcoverBookBlacklist(Base):
     """Track book-level blacklisting for hardcover sync features."""
     __tablename__ = 'hardcover_book_blacklist'
@@ -992,6 +1028,44 @@ def migrate_user_table(engine, _session):
                 )
     except Exception as e:
         print(f"[Migration] Warning: Could not update duplicates sidebar setting: {e}")
+        _session.rollback()
+
+    # Migration to enable notes sidebar for existing users (one-time)
+    try:
+        from . import constants
+        SIDEBAR_NOTES = constants.SIDEBAR_NOTES
+
+        migration_dir = os.path.join(constants.CONFIG_DIR, ".cwa_migrations")
+        migration_marker = os.path.join(migration_dir, "notes_sidebar_v1")
+
+        if not os.path.isfile(migration_marker):
+            # Default visibility for users created later
+            try:
+                _session.execute(text("UPDATE settings SET config_default_show = config_default_show | 524288"))
+                _session.commit()
+            except Exception as settings_error:
+                print(f"[Migration] Warning: Could not update default notes sidebar setting: {settings_error}")
+                _session.rollback()
+
+            users_migrated = 0
+            for user in _session.query(User).filter(User.role != constants.ROLE_ANONYMOUS).all():
+                if not (user.sidebar_view & SIDEBAR_NOTES):
+                    user.sidebar_view |= SIDEBAR_NOTES
+                    users_migrated += 1
+
+            _session.commit()
+            print(f"[Migration] Enabled notes sidebar for {users_migrated} user(s)")
+            try:
+                os.makedirs(migration_dir, exist_ok=True)
+                with open(migration_marker, "w", encoding="utf-8") as marker:
+                    marker.write(datetime.now(timezone.utc).isoformat())
+            except Exception as marker_error:
+                print(
+                    f"[Migration] Warning: Could not persist notes sidebar migration marker: {marker_error}",
+                    flush=True,
+                )
+    except Exception as e:
+        print(f"[Migration] Warning: Could not update notes sidebar setting: {e}")
         _session.rollback()
 
 def migrate_oauth_provider_table(engine, _session):
