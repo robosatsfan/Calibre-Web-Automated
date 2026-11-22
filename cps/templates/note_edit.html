@@ -48,7 +48,18 @@
       <textarea class="form-control" id="note-body" name="body" rows="14"
                 maxlength="50000">{{ v['body'] }}</textarea>
       <div class="note-preview" data-cwa-preview-pane hidden></div>
-      <p class="help-block">{{ _('Markdown supported') }}</p>
+      <p class="help-block">{{ _('Markdown supported') }} &middot; {{ _('Reference a quote with [#n]') }}</p>
+      {% if citation_views %}
+        <div class="note-ref-insert">
+          <span class="note-ref-insert-label">{{ _('Insert quote reference:') }}</span>
+          {% for item in citation_views %}
+            {% set citation = item.citation %}
+            {% set num = citation.seq if citation.seq is not none else citation.id %}
+            <button type="button" class="note-ref" data-cwa-insert-ref="{{ num }}"
+                    data-target="note-body">[#{{ num }}]</button>
+          {% endfor %}
+        </div>
+      {% endif %}
     </div>
 
     <div class="form-group">
@@ -78,58 +89,75 @@
     <div class="note-quotes" data-cwa-citations
          data-error-text="{{ _('Could not save the change.') }}">
       <h3>{{ _('Quotes') }}</h3>
-      <ul class="note-quote-list">
+      <div class="note-quote-list">
         {% for item in citation_views %}
           {% set citation = item.citation %}
-          <li class="note-quote note-quote-{{ citation.color }}"
-              data-cwa-citation
-              data-update-url="{{ url_for('notes.citation_update', citation_id=citation.id) }}"
-              data-delete-url="{{ url_for('notes.citation_delete', citation_id=citation.id) }}">
-            {% if citation.quote %}
-              <blockquote>{{ citation.quote }}</blockquote>
-            {% endif %}
-            <div class="note-quote-meta">
+          {% set num = citation.seq if citation.seq is not none else citation.id %}
+          <details class="note-quote note-quote-{{ citation.color }}"
+                   id="quote-{{ num }}"
+                   data-cwa-citation
+                   data-cwa-quote="{{ num }}"
+                   data-update-url="{{ url_for('notes.citation_update', citation_id=citation.id) }}"
+                   data-delete-url="{{ url_for('notes.citation_delete', citation_id=citation.id) }}">
+            <summary>
+              <span class="note-quote-num">[#{{ num }}]</span>
+              <span class="note-quote-preview">{{ citation.quote[:80] }}{% if citation.quote|length > 80 %}&hellip;{% endif %}</span>
               {% if item.book_title %}
                 <span class="note-quote-book">{{ item.book_title }}</span>
               {% else %}
                 <span class="note-quote-book note-muted">{{ _('Book no longer available') }}</span>
               {% endif %}
-              {% if citation.chapter_label %}
-                <span class="note-quote-loc">{{ citation.chapter_label }}</span>
+            </summary>
+            <div class="note-quote-body">
+              {% if citation.quote %}
+                <blockquote class="note-quote-text">{{ citation.quote }}</blockquote>
               {% endif %}
-              {% if citation.page %}
-                <span class="note-quote-loc">
-                  {{ _('Page') }} {{ citation.page }}{% if citation.paragraph %} &middot; {{ _('Paragraph') }} {{ citation.paragraph }}{% endif %}
-                </span>
-              {% endif %}
+              <div class="note-quote-meta">
+                {% if item.book_title %}
+                  <span class="note-quote-book">{{ item.book_title }}</span>
+                {% endif %}
+                {% if citation.chapter_label %}
+                  <span class="note-quote-loc">{{ citation.chapter_label }}</span>
+                {% endif %}
+                {% if citation.page %}
+                  <span class="note-quote-loc">
+                    {{ _('Page') }} {{ citation.page }}{% if citation.paragraph %} &middot; {{ _('Paragraph') }} {{ citation.paragraph }}{% endif %}
+                  </span>
+                {% endif %}
+                <button type="button" class="btn btn-xs btn-default" data-cwa-copy-quote
+                        data-copied-text="{{ _('Copied') }}"
+                        data-copy-failed-text="{{ _('Copy failed') }}">
+                  {{ _('Copy quote') }}
+                </button>
+              </div>
+              <div class="note-quote-edit">
+                <label class="note-quote-field">
+                  <span>{{ _('Colour') }}</span>
+                  <select class="form-control input-sm" data-cwa-citation-color>
+                    {% for color in ['yellow', 'green', 'blue', 'pink'] %}
+                      <option value="{{ color }}" {% if citation.color == color %}selected{% endif %}>{{ _(color|capitalize) }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label class="note-quote-field note-quote-field-comment">
+                  <span>{{ _('Comment') }}</span>
+                  <textarea class="form-control input-sm" rows="2" data-cwa-citation-comment>{{ citation.comment }}</textarea>
+                </label>
+              </div>
+              <div class="note-quote-actions">
+                <button type="button" class="btn btn-xs btn-primary" data-cwa-citation-save>
+                  {{ _('Save quote') }}
+                </button>
+                <button type="button" class="btn btn-xs btn-danger" data-cwa-citation-delete
+                        data-confirm="{{ _('Delete this quote?') }}">
+                  {{ _('Delete quote') }}
+                </button>
+                <span class="note-quote-status" data-cwa-citation-status></span>
+              </div>
             </div>
-            <div class="note-quote-edit">
-              <label class="note-quote-field">
-                <span>{{ _('Colour') }}</span>
-                <select class="form-control input-sm" data-cwa-citation-color>
-                  {% for color in ['yellow', 'green', 'blue', 'pink'] %}
-                    <option value="{{ color }}" {% if citation.color == color %}selected{% endif %}>{{ _(color|capitalize) }}</option>
-                  {% endfor %}
-                </select>
-              </label>
-              <label class="note-quote-field note-quote-field-comment">
-                <span>{{ _('Comment') }}</span>
-                <textarea class="form-control input-sm" rows="2" data-cwa-citation-comment>{{ citation.comment }}</textarea>
-              </label>
-            </div>
-            <div class="note-quote-actions">
-              <button type="button" class="btn btn-xs btn-primary" data-cwa-citation-save>
-                {{ _('Save quote') }}
-              </button>
-              <button type="button" class="btn btn-xs btn-danger" data-cwa-citation-delete
-                      data-confirm="{{ _('Delete this quote?') }}">
-                {{ _('Delete quote') }}
-              </button>
-              <span class="note-quote-status" data-cwa-citation-status></span>
-            </div>
-          </li>
+          </details>
         {% endfor %}
-      </ul>
+      </div>
     </div>
   {% endif %}
 </div>

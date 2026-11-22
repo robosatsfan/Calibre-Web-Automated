@@ -268,6 +268,47 @@
         });
     }
 
+    function initRefInsert() {
+        var buttons = document.querySelectorAll("[data-cwa-insert-ref]");
+        if (!buttons.length) {
+            return;
+        }
+
+        function insertAtCursor(textarea, text) {
+            var start = typeof textarea.selectionStart === "number" ? textarea.selectionStart : textarea.value.length;
+            var end = typeof textarea.selectionEnd === "number" ? textarea.selectionEnd : start;
+            textarea.value = textarea.value.slice(0, start) + text + textarea.value.slice(end);
+            var position = start + text.length;
+            textarea.focus();
+            try {
+                textarea.setSelectionRange(position, position);
+            } catch (error) {
+                // Some browsers refuse setSelectionRange on hidden textareas
+            }
+            textarea.dispatchEvent(new Event("input", {bubbles: true}));
+        }
+
+        Array.prototype.forEach.call(buttons, function (button) {
+            button.addEventListener("click", function () {
+                var form = button.closest("[data-cwa-note-form]");
+                var targetId = button.getAttribute("data-target") || "note-body";
+                var textarea = form ? form.querySelector("#" + targetId) : document.getElementById(targetId);
+                if (!textarea) {
+                    return;
+                }
+                if (textarea.hidden) {
+                    var writeButton = form ? form.querySelector("[data-cwa-mode='write']") : null;
+                    if (writeButton) {
+                        writeButton.click();
+                    } else {
+                        textarea.hidden = false;
+                    }
+                }
+                insertAtCursor(textarea, "[#" + button.getAttribute("data-cwa-insert-ref") + "]");
+            });
+        });
+    }
+
     function initQuoteHash() {
         var hash = window.location.hash || "";
         var match = /^#quote-(\d+)$/.exec(hash);
@@ -279,5 +320,6 @@
     document.addEventListener("DOMContentLoaded", initEditor);
     document.addEventListener("DOMContentLoaded", initCitations);
     document.addEventListener("DOMContentLoaded", initQuoteTools);
+    document.addEventListener("DOMContentLoaded", initRefInsert);
     document.addEventListener("DOMContentLoaded", initQuoteHash);
 })();

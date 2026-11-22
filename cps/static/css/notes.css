@@ -198,6 +198,25 @@
     background: rgba(127, 127, 127, 0.2);
 }
 
+button.note-ref {
+    cursor: pointer;
+    background: transparent;
+    line-height: 1.6;
+}
+
+.note-ref-insert {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: -0.25rem 0 0.75rem;
+}
+
+.note-ref-insert-label {
+    font-size: 0.85em;
+    opacity: 0.75;
+}
+
 .note-quote-list {
     list-style: none;
     padding: 0;
