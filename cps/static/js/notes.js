@@ -35,7 +35,10 @@
                 "Content-Type": "application/json",
                 "X-CSRFToken": getCsrfToken(form)
             },
-            body: JSON.stringify({text: textarea.value})
+            body: JSON.stringify({
+                text: textarea.value,
+                note_id: form.getAttribute("data-note-id") || ""
+            })
         }).then(function (response) {
             if (!response.ok) {
                 throw new Error("preview failed");
@@ -234,8 +237,7 @@
     }
 
     function initQuoteTools() {
-        document.addEventListener("click", function (event) {
-            var target = event.target;
+        document.addEventListener("click", function (event) {            var target = event.target;
             if (!target || !target.closest) {
                 return;
             }
@@ -266,7 +268,16 @@
         });
     }
 
+    function initQuoteHash() {
+        var hash = window.location.hash || "";
+        var match = /^#quote-(\d+)$/.exec(hash);
+        if (match) {
+            openQuoteRef(match[1]);
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", initEditor);
     document.addEventListener("DOMContentLoaded", initCitations);
     document.addEventListener("DOMContentLoaded", initQuoteTools);
+    document.addEventListener("DOMContentLoaded", initQuoteHash);
 })();

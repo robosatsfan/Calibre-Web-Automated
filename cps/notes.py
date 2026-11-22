@@ -281,6 +281,8 @@ def note_view(note_id):
     note = _visible_note_or_404(note_id)
     is_owner = note.user_id == current_user.id
     views = _citation_views(note, is_owner=is_owner)
+    quote_seqs = {item['citation'].seq for item in views
+                  if item['citation'].seq is not None}
     quote_comments = []
     for item in views:
         citation = item['citation']
@@ -296,7 +298,7 @@ def note_view(note_id):
                                  note=note,
                                  citation_views=views,
                                  quote_comments=quote_comments,
-                                 rendered_body=render_markdown(note.body),
+                                 rendered_body=render_markdown(note.body, quote_seqs),
                                  is_owner=is_owner,
                                  title=note.title or _("Note"),
                                  page="notes")
@@ -348,7 +350,18 @@ def notes_preview():
     text = payload.get('text')
     if text is None:
         text = request.form.get('body', '')
-    return jsonify({"html": render_markdown(clean_note_text(text, MAX_BODY))})
+    quote_seqs = set()
+    note_id = payload.get('note_id')
+    if note_id not in (None, '', 0, '0'):
+        try:
+            note = ub.session.query(ub.Note).filter(
+                ub.Note.id == int(note_id), ub.Note.user_id == current_user.id).first()
+        except (TypeError, ValueError):
+            note = None
+        if note is not None:
+            quote_seqs = {citation.seq for citation in note.citations
+                          if citation.seq is not None}
+    return jsonify({"html": render_markdown(clean_note_text(text, MAX_BODY), quote_seqs)})
 
 
 # ---------------------------------------------------------------------------

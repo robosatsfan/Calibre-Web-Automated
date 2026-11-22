@@ -349,6 +349,38 @@ class TestQuoteSequence:
 
 
 @pytest.mark.unit
+class TestPreview:
+    def _preview(self, env, payload):
+        with env.app.test_request_context('/notes/preview', method='POST', json=payload):
+            return _unwrapped('notes_preview')().get_json()['html']
+
+    def test_own_quote_refs_become_links(self, env):
+        note = ub.Note(user_id=env.user_a.id, title='P', body='')
+        env.session.add(note)
+        env.session.commit()
+        env.session.add(ub.NoteCitation(note_id=note.id, user_id=env.user_a.id, book_id=1,
+                                        book_format='EPUB', quote='q', cfi_range=CFI, seq=1))
+        env.session.commit()
+        html = self._preview(env, {'text': 'see [#1]', 'note_id': note.id})
+        assert 'href="#quote-1"' in html
+
+    def test_foreign_note_refs_stay_plain(self, env):
+        note = ub.Note(user_id=env.user_a.id, title='P', body='')
+        env.session.add(note)
+        env.session.commit()
+        env.session.add(ub.NoteCitation(note_id=note.id, user_id=env.user_a.id, book_id=1,
+                                        book_format='EPUB', quote='q', cfi_range=CFI, seq=1))
+        env.session.commit()
+        env.set_user(env.user_b)
+        html = self._preview(env, {'text': 'see [#1]', 'note_id': note.id})
+        assert 'href="#quote-1"' not in html
+
+    def test_garbage_note_id_is_ignored(self, env):
+        html = self._preview(env, {'text': 'see [#1]', 'note_id': 'abc'})
+        assert 'href="#quote-1"' not in html
+
+
+@pytest.mark.unit
 class TestExport:
     def _seed(self, env):
         note = ub.Note(user_id=env.user_a.id, title='Trip', body='line one',

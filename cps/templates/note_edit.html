@@ -23,6 +23,7 @@
         data-preview-url="{{ url_for('notes.notes_preview') }}"
         data-preview-error="{{ _('Preview could not be generated.') }}"
         data-preview-empty="{{ _('Nothing to preview yet.') }}"
+        data-note-id="{% if note %}{{ note.id }}{% endif %}"
         action="{% if note %}{{ url_for('notes.note_edit', note_id=note.id) }}{% else %}{{ url_for('notes.note_create') }}{% endif %}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 

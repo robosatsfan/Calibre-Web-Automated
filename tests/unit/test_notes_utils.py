@@ -85,3 +85,28 @@ class TestRenderMarkdown:
     def test_javascript_link_is_removed(self):
         html = render_markdown('[click](javascript:alert(1))')
         assert 'javascript:' not in html
+
+    def test_quote_refs_become_anchor_links(self):
+        html = render_markdown('see [#2] and [#5]', {2, 5})
+        assert 'href="#quote-2"' in html and 'href="#quote-5"' in html
+        assert '[#2]' in html
+
+    def test_unknown_quote_ref_is_left_alone(self):
+        html = render_markdown('see [#3]', {1})
+        assert 'href="#quote-3"' not in html
+        assert '[#3]' in html
+
+    def test_quote_refs_inside_code_are_not_linked(self):
+        html = render_markdown('inline `[#1]` then\n\n```\n[#1]\n```\n\nand [#1]', {1})
+        # Only the trailing reference outside code becomes a link
+        assert html.count('href="#quote-1"') == 1
+        assert '[#1]' in html
+
+    def test_quote_refs_do_not_enable_html_injection(self):
+        html = render_markdown('[#1] <script>alert(1)</script>', {1})
+        assert 'href="#quote-1"' in html
+        assert '<script' not in html
+
+    def test_no_quote_seqs_keeps_plain_text(self):
+        html = render_markdown('see [#2]')
+        assert 'href="#quote-2"' not in html
