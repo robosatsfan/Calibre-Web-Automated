@@ -136,6 +136,50 @@
   display: none;
 }
 
+.cwa-popup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.cwa-popup-head .cwa-popup-title {
+  margin-bottom: 0;
+}
+
+.cwa-popup-close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #444;
+  font: 20px/1 sans-serif;
+  cursor: pointer;
+}
+
+.cwa-popup-close:hover,
+.cwa-popup-close:focus {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+/* Dragged windows are positioned with inline left/top instead of the default */
+#cwa-note-popup.cwa-popup-dragged {
+  bottom: auto;
+  transform: none;
+}
+
+#cwa-pdf-note-dialog.cwa-dialog-dragged {
+  margin: 0;
+}
+
 .cwa-popup-title {
   font-weight: bold;
   margin-bottom: 6px;
@@ -301,6 +345,15 @@
 #cwa-pdf-note-dialog strong {
   display: block;
   margin-bottom: 4px;
+}
+
+#cwa-pdf-note-dialog .cwa-popup-head strong {
+  margin-bottom: 0;
+}
+
+#cwa-pdf-note-dialog textarea[readonly] {
+  color: #444;
+  background: #f6f6f6;
 }
 
 .cwa-pdf-actions button {
