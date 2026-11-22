@@ -719,6 +719,106 @@
         }, SELECT_DEBOUNCE_MS);
     });
 
+    // ---- Keep the page still while text is being selected ----
+    // The paginated view pages by scrolling an overflow:hidden container. Dragging a
+    // selection to or past the column edge makes the browser scroll that container
+    // off the page grid, and the touch swipe handler in epub.js turns the page on any
+    // horizontal finger movement. Both are undone when the gesture produced a new selection.
+
+    var HOLD_MS = 600;
+    var gesture = null;
+    var hold = null;
+
+    function viewContainer() {
+        var manager = reader.rendition.manager;
+        return manager && manager.isPaginated && manager.container ? manager.container : null;
+    }
+
+    function newSelectionText(contents) {
+        try {
+            var selection = contents && contents.window && contents.window.getSelection();
+            return selection && !selection.isCollapsed ? selection.toString() : "";
+        } catch (e) {
+            return "";
+        }
+    }
+
+    function touchX(event) {
+        var touch = event && event.changedTouches && event.changedTouches[0];
+        return touch ? touch.screenX : null;
+    }
+
+    function restoreHold() {
+        var container = viewContainer();
+        if (!hold || !container) {
+            return;
+        }
+        if (Date.now() > hold.until) {
+            hold = null;
+            return;
+        }
+        if (container.scrollLeft !== hold.left || container.scrollTop !== hold.top) {
+            container.scrollLeft = hold.left;
+            container.scrollTop = hold.top;
+        }
+    }
+
+    function startGesture(event, contents) {
+        hold = null;
+        var container = viewContainer();
+        if (!container) {
+            gesture = null;
+            return;
+        }
+        var location = reader.rendition.location;
+        gesture = {
+            left: container.scrollLeft,
+            top: container.scrollTop,
+            cfi: location && location.start ? location.start.cfi : null,
+            selection: newSelectionText(contents),
+            x: touchX(event)
+        };
+    }
+
+    function endGesture(event, contents) {
+        var start = gesture;
+        gesture = null;
+        if (!start || !viewContainer()) {
+            return;
+        }
+        var text = newSelectionText(contents);
+        if (!text || text === start.selection) {
+            // A tap, click or swipe without a new selection: normal paging
+            return;
+        }
+        if (event.type === "touchend") {
+            // epub.js has already queued next()/prev(); queue the way back behind it
+            if (start.x !== null && touchX(event) !== start.x && isValidCfi(start.cfi)) {
+                reader.rendition.display(start.cfi);
+            }
+            return;
+        }
+        hold = { left: start.left, top: start.top, until: Date.now() + HOLD_MS };
+        restoreHold();
+    }
+
+    function releaseHold() {
+        hold = null;
+    }
+
+    reader.rendition.on("mousedown", startGesture);
+    reader.rendition.on("touchstart", startGesture);
+    reader.rendition.on("mouseup", endGesture);
+    reader.rendition.on("touchend", endGesture);
+    // The browser may reveal the selection end a moment after the button is released
+    reader.rendition.on("relocated", restoreHold);
+    reader.rendition.on("selected", restoreHold);
+    // Deliberate paging always wins over the hold
+    reader.rendition.on("keydown", releaseHold);
+    document.addEventListener("keydown", releaseHold, true);
+    document.addEventListener("mousedown", releaseHold, true);
+    document.addEventListener("wheel", releaseHold, true);
+
     // Clicking in the book without a selection (collapsing it) cancels the popup
     reader.rendition.on("click", function (event) {
         var view = event && event.view;
