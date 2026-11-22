@@ -402,6 +402,70 @@
         }
     }
 
+    var DRAG_MIN_VISIBLE = 40;
+    var drag = null;
+
+    function clamp(value, min, max) {
+        return Math.min(Math.max(value, min), max);
+    }
+
+    // Drag the popup by its header. The position is only kept for this session.
+    function makeDraggable(head) {
+        function dragStart(event) {
+            if (drag || event.button !== 0) {
+                return;
+            }
+            if (event.target.closest && event.target.closest(".cwa-popup-close")) {
+                return;
+            }
+            var rect = popup.getBoundingClientRect();
+            popup.style.left = rect.left + "px";
+            popup.style.top = rect.top + "px";
+            popup.classList.add("cwa-popup-dragged");
+            drag = {
+                pointerId: event.pointerId,
+                offsetX: event.clientX - rect.left,
+                offsetY: event.clientY - rect.top
+            };
+            if (head.setPointerCapture) {
+                head.setPointerCapture(event.pointerId);
+            }
+            event.preventDefault();
+        }
+
+        function dragMove(event) {
+            if (!drag || event.pointerId !== drag.pointerId) {
+                return;
+            }
+            var maxLeft = Math.max(0, window.innerWidth - DRAG_MIN_VISIBLE);
+            var minLeft = Math.min(DRAG_MIN_VISIBLE - popup.offsetWidth, maxLeft);
+            var left = clamp(event.clientX - drag.offsetX, minLeft, maxLeft);
+            var top = clamp(event.clientY - drag.offsetY, 0, Math.max(0, window.innerHeight - DRAG_MIN_VISIBLE));
+            popup.style.left = left + "px";
+            popup.style.top = top + "px";
+            event.preventDefault();
+        }
+
+        function dragEnd(event) {
+            if (!drag || event.pointerId !== drag.pointerId) {
+                return;
+            }
+            if (head.releasePointerCapture) {
+                try {
+                    head.releasePointerCapture(event.pointerId);
+                } catch (e) {
+                    // The pointer may already be gone
+                }
+            }
+            drag = null;
+        }
+
+        head.addEventListener("pointerdown", dragStart);
+        head.addEventListener("pointermove", dragMove);
+        head.addEventListener("pointerup", dragEnd);
+        head.addEventListener("pointercancel", dragEnd);
+    }
+
     function buildPopup() {
         popup = el("div", "cwa-note-popup");
         popup.id = "cwa-note-popup";
@@ -409,9 +473,47 @@
         popup.setAttribute("aria-label", i18n.addNote);
         popup.hidden = true;
 
-        popup.appendChild(el("div", "cwa-popup-title", i18n.addNote));
-        popup.quoteEl = popup.appendChild(el("blockquote", "cwa-popup-quote"));
+        var head = popup.appendChild(el("div", "cwa-popup-head"));
+        head.appendChild(el("span", "cwa-popup-title", i18n.addNote));
+        var closeBtn = el("button", "cwa-popup-close", "\u00d7");
+        closeBtn.type = "button";
+        closeBtn.setAttribute("aria-label", i18n.close || "Close");
+        closeBtn.addEventListener("click", function (event) {
+            event.stopPropagation();
+            hidePopup();
+        });
+        head.appendChild(closeBtn);
+        makeDraggable(head);
 
+        // 1. Note title (only when a new note is created)
+        popup.titleWrap = popup.appendChild(el("div", "cwa-popup-title-wrap"));
+        var titleLabel = popup.titleWrap.appendChild(el("label", "cwa-popup-label", i18n.noteTitle));
+        popup.titleEl = el("input", "cwa-popup-note-title");
+        popup.titleEl.id = "cwa-popup-note-title";
+        popup.titleEl.type = "text";
+        popup.titleEl.maxLength = 255;
+        popup.titleEl.placeholder = i18n.titlePlaceholder || "";
+        titleLabel.htmlFor = popup.titleEl.id;
+        popup.titleWrap.appendChild(popup.titleEl);
+
+        // 2. Add to
+        var targetLabel = popup.appendChild(el("label", "cwa-popup-label", i18n.addTo));
+        popup.targetEl = el("select", "cwa-popup-target");
+        popup.targetEl.id = "cwa-popup-target";
+        targetLabel.htmlFor = popup.targetEl.id;
+        popup.targetEl.appendChild(new Option(i18n.newNote, ""));
+        popup.targetEl.addEventListener("change", updateTitleVisibility);
+        popup.appendChild(popup.targetEl);
+
+        // 3. Comment
+        var commentLabel = popup.appendChild(el("label", "cwa-popup-label", i18n.comment));
+        popup.commentEl = el("textarea", "cwa-popup-comment");
+        popup.commentEl.id = "cwa-popup-comment";
+        popup.commentEl.rows = 3;
+        commentLabel.htmlFor = popup.commentEl.id;
+        popup.appendChild(popup.commentEl);
+
+        // 4. Colour
         var swatches = popup.appendChild(el("div", "cwa-popup-swatches"));
         swatches.setAttribute("role", "radiogroup");
         swatches.setAttribute("aria-label", i18n.color);
@@ -427,30 +529,8 @@
             swatches.appendChild(btn);
         });
 
-        var commentLabel = popup.appendChild(el("label", "cwa-popup-label", i18n.comment));
-        popup.commentEl = el("textarea", "cwa-popup-comment");
-        popup.commentEl.id = "cwa-popup-comment";
-        popup.commentEl.rows = 3;
-        commentLabel.htmlFor = popup.commentEl.id;
-        popup.appendChild(popup.commentEl);
-
-        var targetLabel = popup.appendChild(el("label", "cwa-popup-label", i18n.addTo));
-        popup.targetEl = el("select", "cwa-popup-target");
-        popup.targetEl.id = "cwa-popup-target";
-        targetLabel.htmlFor = popup.targetEl.id;
-        popup.targetEl.appendChild(new Option(i18n.newNote, ""));
-        popup.targetEl.addEventListener("change", updateTitleVisibility);
-        popup.appendChild(popup.targetEl);
-
-        popup.titleWrap = popup.appendChild(el("div", "cwa-popup-title-wrap"));
-        var titleLabel = popup.titleWrap.appendChild(el("label", "cwa-popup-label", i18n.noteTitle));
-        popup.titleEl = el("input", "cwa-popup-note-title");
-        popup.titleEl.id = "cwa-popup-note-title";
-        popup.titleEl.type = "text";
-        popup.titleEl.maxLength = 255;
-        popup.titleEl.placeholder = i18n.titlePlaceholder || "";
-        titleLabel.htmlFor = popup.titleEl.id;
-        popup.titleWrap.appendChild(popup.titleEl);
+        // 5. Preview of the selected text
+        popup.quoteEl = popup.appendChild(el("blockquote", "cwa-popup-quote"));
 
         popup.errorEl = popup.appendChild(el("div", "cwa-notes-error cwa-popup-error"));
         popup.errorEl.setAttribute("role", "alert");
@@ -553,10 +633,19 @@
 
     function hidePopup() {
         clearTimeout(selectTimer);
+        var contents = pending ? pending.contents : null;
         pending = null;
         if (popup && !popup.hidden) {
             popup.hidden = true;
             showPopupError("");
+            // Best effort: put keyboard focus back into the book
+            try {
+                if (contents && contents.window) {
+                    contents.window.focus();
+                }
+            } catch (e) {
+                // The section may have been unloaded already
+            }
         }
     }
 
@@ -630,6 +719,106 @@
         }, SELECT_DEBOUNCE_MS);
     });
 
+    // ---- Keep the page still while text is being selected ----
+    // The paginated view pages by scrolling an overflow:hidden container. Dragging a
+    // selection to or past the column edge makes the browser scroll that container
+    // off the page grid, and the touch swipe handler in epub.js turns the page on any
+    // horizontal finger movement. Both are undone when the gesture produced a new selection.
+
+    var HOLD_MS = 600;
+    var gesture = null;
+    var hold = null;
+
+    function viewContainer() {
+        var manager = reader.rendition.manager;
+        return manager && manager.isPaginated && manager.container ? manager.container : null;
+    }
+
+    function newSelectionText(contents) {
+        try {
+            var selection = contents && contents.window && contents.window.getSelection();
+            return selection && !selection.isCollapsed ? selection.toString() : "";
+        } catch (e) {
+            return "";
+        }
+    }
+
+    function touchX(event) {
+        var touch = event && event.changedTouches && event.changedTouches[0];
+        return touch ? touch.screenX : null;
+    }
+
+    function restoreHold() {
+        var container = viewContainer();
+        if (!hold || !container) {
+            return;
+        }
+        if (Date.now() > hold.until) {
+            hold = null;
+            return;
+        }
+        if (container.scrollLeft !== hold.left || container.scrollTop !== hold.top) {
+            container.scrollLeft = hold.left;
+            container.scrollTop = hold.top;
+        }
+    }
+
+    function startGesture(event, contents) {
+        hold = null;
+        var container = viewContainer();
+        if (!container) {
+            gesture = null;
+            return;
+        }
+        var location = reader.rendition.location;
+        gesture = {
+            left: container.scrollLeft,
+            top: container.scrollTop,
+            cfi: location && location.start ? location.start.cfi : null,
+            selection: newSelectionText(contents),
+            x: touchX(event)
+        };
+    }
+
+    function endGesture(event, contents) {
+        var start = gesture;
+        gesture = null;
+        if (!start || !viewContainer()) {
+            return;
+        }
+        var text = newSelectionText(contents);
+        if (!text || text === start.selection) {
+            // A tap, click or swipe without a new selection: normal paging
+            return;
+        }
+        if (event.type === "touchend") {
+            // epub.js has already queued next()/prev(); queue the way back behind it
+            if (start.x !== null && touchX(event) !== start.x && isValidCfi(start.cfi)) {
+                reader.rendition.display(start.cfi);
+            }
+            return;
+        }
+        hold = { left: start.left, top: start.top, until: Date.now() + HOLD_MS };
+        restoreHold();
+    }
+
+    function releaseHold() {
+        hold = null;
+    }
+
+    reader.rendition.on("mousedown", startGesture);
+    reader.rendition.on("touchstart", startGesture);
+    reader.rendition.on("mouseup", endGesture);
+    reader.rendition.on("touchend", endGesture);
+    // The browser may reveal the selection end a moment after the button is released
+    reader.rendition.on("relocated", restoreHold);
+    reader.rendition.on("selected", restoreHold);
+    // Deliberate paging always wins over the hold
+    reader.rendition.on("keydown", releaseHold);
+    document.addEventListener("keydown", releaseHold, true);
+    document.addEventListener("mousedown", releaseHold, true);
+    document.addEventListener("wheel", releaseHold, true);
+
     // Clicking in the book without a selection (collapsing it) cancels the popup
     reader.rendition.on("click", function (event) {
         var view = event && event.view;
@@ -657,6 +846,9 @@
     });
 
     document.addEventListener("mousedown", function (event) {
+        if (drag) {
+            return;
+        }
         if (popup && !popup.hidden && !popup.contains(event.target)) {
             hidePopup();
         }

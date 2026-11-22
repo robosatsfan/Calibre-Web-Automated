@@ -26,6 +26,8 @@
     var titleWrap = document.getElementById("cwa-pdf-title-wrap");
     var titleEl = document.getElementById("cwa-pdf-title");
     var errorEl = document.getElementById("cwa-pdf-error");
+    var headEl = document.getElementById("cwa-pdf-note-head");
+    var closeBtn = document.getElementById("cwa-pdf-close");
     var saveBtn = document.getElementById("cwa-pdf-save");
     var cancelBtn = document.getElementById("cwa-pdf-cancel");
     if (!btn || !dialog || !form) {
@@ -60,6 +62,66 @@
 
     function updateTitleVisibility() {
         titleWrap.hidden = targetEl.value !== "";
+    }
+
+    // ---- Drag the dialog by its header (session only, no persistence) ----
+
+    var DRAG_MIN_VISIBLE = 40;
+    var drag = null;
+
+    function clamp(value, min, max) {
+        return Math.min(Math.max(value, min), max);
+    }
+
+    function dragStart(event) {
+        if (drag || event.button !== 0) {
+            return;
+        }
+        if (event.target.closest && event.target.closest("#cwa-pdf-close")) {
+            return;
+        }
+        var rect = dialog.getBoundingClientRect();
+        dialog.style.left = rect.left + "px";
+        dialog.style.top = rect.top + "px";
+        dialog.style.bottom = "auto";
+        dialog.style.right = "auto";
+        dialog.classList.add("cwa-dialog-dragged");
+        drag = {
+            pointerId: event.pointerId,
+            offsetX: event.clientX - rect.left,
+            offsetY: event.clientY - rect.top
+        };
+        if (headEl.setPointerCapture) {
+            headEl.setPointerCapture(event.pointerId);
+        }
+        event.preventDefault();
+    }
+
+    function dragMove(event) {
+        if (!drag || event.pointerId !== drag.pointerId) {
+            return;
+        }
+        var maxLeft = Math.max(0, window.innerWidth - DRAG_MIN_VISIBLE);
+        var minLeft = Math.min(DRAG_MIN_VISIBLE - dialog.offsetWidth, maxLeft);
+        var left = clamp(event.clientX - drag.offsetX, minLeft, maxLeft);
+        var top = clamp(event.clientY - drag.offsetY, 0, Math.max(0, window.innerHeight - DRAG_MIN_VISIBLE));
+        dialog.style.left = left + "px";
+        dialog.style.top = top + "px";
+        event.preventDefault();
+    }
+
+    function dragEnd(event) {
+        if (!drag || event.pointerId !== drag.pointerId) {
+            return;
+        }
+        if (headEl.releasePointerCapture) {
+            try {
+                headEl.releasePointerCapture(event.pointerId);
+            } catch (e) {
+                // The pointer may already be gone
+            }
+        }
+        drag = null;
     }
 
     function loadMine() {
@@ -110,7 +172,7 @@
             dialog.setAttribute("open", "");
         }
         loadMine();
-        (quoteEl.value ? commentEl : quoteEl).focus();
+        commentEl.focus();
     }
 
     function closeDialog() {
@@ -229,6 +291,15 @@
     });
     btn.addEventListener("click", openDialog);
     cancelBtn.addEventListener("click", closeDialog);
+    if (closeBtn) {
+        closeBtn.addEventListener("click", closeDialog);
+    }
+    if (headEl) {
+        headEl.addEventListener("pointerdown", dragStart);
+        headEl.addEventListener("pointermove", dragMove);
+        headEl.addEventListener("pointerup", dragEnd);
+        headEl.addEventListener("pointercancel", dragEnd);
+    }
     targetEl.addEventListener("change", updateTitleVisibility);
     form.addEventListener("submit", function (event) {
         event.preventDefault();

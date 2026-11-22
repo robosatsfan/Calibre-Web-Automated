@@ -526,9 +526,22 @@ See https://github.com/adobe-type-tools/cmap-resources
     <button type="button" id="cwa-pdf-note-btn" title="{{ _('Add note') }}">✎ {{ _('Note') }}</button>
     <dialog id="cwa-pdf-note-dialog" aria-labelledby="cwa-pdf-note-heading">
       <form method="dialog" id="cwa-pdf-note-form">
-        <strong id="cwa-pdf-note-heading">{{ _('Add note') }}</strong>
-        <label for="cwa-pdf-quote">{{ _('Text') }}</label>
-        <textarea id="cwa-pdf-quote" rows="4"></textarea>
+        <div class="cwa-popup-head" id="cwa-pdf-note-head">
+          <strong id="cwa-pdf-note-heading">{{ _('Add note') }}</strong>
+          <button type="button" class="cwa-popup-close" id="cwa-pdf-close" aria-label="{{ _('Close') }}">&times;</button>
+        </div>
+        <div id="cwa-pdf-title-wrap">
+          <label for="cwa-pdf-title">{{ _('Title') }}</label>
+          <input type="text" id="cwa-pdf-title" maxlength="255" placeholder="{{ _('Optional, defaults to the book title') }}">
+        </div>
+        <label for="cwa-pdf-target">{{ _('Add to') }}</label>
+        <select id="cwa-pdf-target">
+          <option value="">{{ _('New note') }}</option>
+        </select>
+        <label for="cwa-pdf-comment">{{ _('Comment') }}</label>
+        <textarea id="cwa-pdf-comment" rows="3"></textarea>
+        <label for="cwa-pdf-quote">{{ _('Selected text') }}</label>
+        <textarea id="cwa-pdf-quote" rows="4" readonly></textarea>
         <div class="cwa-pdf-row">
           <div>
             <label for="cwa-pdf-page">{{ _('Page') }}</label>
@@ -538,16 +551,6 @@ See https://github.com/adobe-type-tools/cmap-resources
             <label for="cwa-pdf-paragraph">{{ _('Paragraph (optional)') }}</label>
             <input type="number" id="cwa-pdf-paragraph" min="1" step="1">
           </div>
-        </div>
-        <label for="cwa-pdf-comment">{{ _('Comment') }}</label>
-        <textarea id="cwa-pdf-comment" rows="3"></textarea>
-        <label for="cwa-pdf-target">{{ _('Add to') }}</label>
-        <select id="cwa-pdf-target">
-          <option value="">{{ _('New note') }}</option>
-        </select>
-        <div id="cwa-pdf-title-wrap">
-          <label for="cwa-pdf-title">{{ _('Title') }}</label>
-          <input type="text" id="cwa-pdf-title" maxlength="255" placeholder="{{ _('Optional, defaults to the book title') }}">
         </div>
         <div class="cwa-pdf-error" id="cwa-pdf-error" role="alert" hidden></div>
         <div class="cwa-pdf-actions">
