@@ -179,6 +179,29 @@ class TestOwnership:
             views = _unwrapped('note_view')(note.id)[1]['citation_views']
         assert views[0]['visible'] is True
 
+    def test_quote_comments_only_visible_and_nonempty(self, env, monkeypatch):
+        note = self._note(env, is_public=True)
+        env.session.add_all([
+            ub.NoteCitation(note_id=note.id, user_id=env.user_a.id, book_id=1,
+                            book_format='EPUB', quote='q1', comment='visible comment',
+                            cfi_range=CFI, seq=1),
+            ub.NoteCitation(note_id=note.id, user_id=env.user_a.id, book_id=2,
+                            book_format='EPUB', quote='q2', comment='secret comment',
+                            cfi_range=CFI, seq=2),
+            ub.NoteCitation(note_id=note.id, user_id=env.user_a.id, book_id=1,
+                            book_format='EPUB', quote='q3', comment='',
+                            cfi_range=CFI, seq=3),
+        ])
+        env.session.commit()
+        monkeypatch.setattr(notes_module, '_book_accessible', lambda book_id: book_id != 2)
+
+        env.set_user(env.user_b)
+        with env.app.test_request_context('/notes/{}'.format(note.id)):
+            kwargs = _unwrapped('note_view')(note.id)[1]
+        comments = kwargs['quote_comments']
+        assert [item['comment'] for item in comments] == ['visible comment']
+        assert comments[0]['num'] == 1 and comments[0]['color'] == 'yellow'
+
 
 @pytest.mark.unit
 class TestCitations:

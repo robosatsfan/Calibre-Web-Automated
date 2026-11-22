@@ -280,9 +280,22 @@ def note_create():
 def note_view(note_id):
     note = _visible_note_or_404(note_id)
     is_owner = note.user_id == current_user.id
+    views = _citation_views(note, is_owner=is_owner)
+    quote_comments = []
+    for item in views:
+        citation = item['citation']
+        if not item['visible'] or not (citation.comment or '').strip():
+            continue
+        quote_comments.append({
+            'num': citation.seq if citation.seq is not None else citation.id,
+            'color': citation.color,
+            'comment': citation.comment,
+            'book_title': item['book_title'],
+        })
     return render_title_template('note_view.html',
                                  note=note,
-                                 citation_views=_citation_views(note, is_owner=is_owner),
+                                 citation_views=views,
+                                 quote_comments=quote_comments,
                                  rendered_body=render_markdown(note.body),
                                  is_owner=is_owner,
                                  title=note.title or _("Note"),

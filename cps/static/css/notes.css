@@ -142,6 +142,62 @@
     margin-top: 1.5rem;
 }
 
+.note-comment-block {
+    margin: 1.5rem 0 0;
+    padding: 0.75rem 1rem 0.25rem;
+    background: rgba(127, 127, 127, 0.12);
+    border: 1px solid rgba(127, 127, 127, 0.25);
+    border-radius: 6px;
+}
+
+.note-comment-block h3 {
+    margin-top: 0;
+    font-size: 1em;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+}
+
+.note-comment-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.note-comment {
+    border-left: 4px solid #e0c341;
+    padding: 0.15rem 0 0.15rem 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.note-comment-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.note-comment-book {
+    font-size: 0.85em;
+    font-style: italic;
+    opacity: 0.7;
+}
+
+.note-ref {
+    display: inline-block;
+    margin-right: 0.35rem;
+    padding: 0 0.35em;
+    border-radius: 4px;
+    border: 1px solid rgba(127, 127, 127, 0.4);
+    font-family: monospace;
+    font-size: 0.85em;
+    text-decoration: none;
+}
+
+.note-ref:hover,
+.note-ref:focus {
+    text-decoration: none;
+    background: rgba(127, 127, 127, 0.2);
+}
+
 .note-quote-list {
     list-style: none;
     padding: 0;
@@ -154,6 +210,78 @@
     border-radius: 4px;
     padding: 0.75rem 1rem;
     margin-bottom: 0.75rem;
+}
+
+.note-quote summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    list-style: none;
+    cursor: pointer;
+}
+
+.note-quote summary::-webkit-details-marker {
+    display: none;
+}
+
+.note-quote summary::after {
+    content: "\25BE";
+    margin-left: auto;
+    opacity: 0.6;
+    transition: transform 0.15s ease;
+}
+
+.note-quote[open] summary::after {
+    transform: rotate(180deg);
+}
+
+.note-quote:not([open]) {
+    padding-bottom: 0.6rem;
+    padding-top: 0.6rem;
+}
+
+.note-quote-num {
+    font-family: monospace;
+    font-size: 0.85em;
+    opacity: 0.75;
+    white-space: nowrap;
+}
+
+.note-quote-preview {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0.85;
+}
+
+.note-quote summary .note-quote-book {
+    flex: 0 1 auto;
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85em;
+    opacity: 0.75;
+}
+
+.note-quote-body {
+    padding-top: 0.6rem;
+}
+
+.note-flash {
+    animation: note-flash 1.5s ease;
+}
+
+@keyframes note-flash {
+    0%,
+    40% {
+        box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.9);
+    }
+    100% {
+        box-shadow: 0 0 0 2px rgba(74, 144, 217, 0);
+    }
 }
 
 .note-quote blockquote {

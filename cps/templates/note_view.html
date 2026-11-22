@@ -47,46 +47,77 @@
     {% endif %}
   </div>
 
-  <div class="note-quotes">
-    <h3>{{ _('Quotes') }}</h3>
-    {% if citation_views %}
-      <ul class="note-quote-list">
-        {% for item in citation_views %}
-          {% set citation = item.citation %}
-          <li class="note-quote note-quote-{{ citation.color }}">
-            {% if item.visible %}
-              {% if citation.quote %}
-                <blockquote>{{ citation.quote }}</blockquote>
-              {% endif %}
-              {% if citation.comment %}
-                <p class="note-quote-comment">{{ citation.comment }}</p>
-              {% endif %}
-            {% else %}
-              <p class="note-muted">{{ _('Quote from a book you cannot access') }}</p>
+  {% if quote_comments %}
+    <section class="note-comment-block" aria-label="{{ _('Comments from quotes') }}">
+      <h3>{{ _('Comments from quotes') }}</h3>
+      <ul class="note-comment-list">
+        {% for item in quote_comments %}
+          <li class="note-comment note-quote-{{ item.color }}">
+            <a class="note-ref" href="#quote-{{ item.num }}"
+               data-cwa-quote-ref="{{ item.num }}">[#{{ item.num }}]</a>
+            <div class="note-comment-text">{{ item.comment }}</div>
+            {% if item.book_title %}
+              <div class="note-comment-book">{{ item.book_title }}</div>
             {% endif %}
-            <div class="note-quote-meta">
-              {% if item.book_title %}
-                <span class="note-quote-book">{{ item.book_title }}</span>
-              {% else %}
-                <span class="note-quote-book note-muted">{{ _('Book no longer available') }}</span>
-              {% endif %}
-              {% if citation.chapter_label %}
-                <span class="note-quote-loc">{{ citation.chapter_label }}</span>
-              {% endif %}
-              {% if citation.page %}
-                <span class="note-quote-loc">
-                  {{ _('Page') }} {{ citation.page }}{% if citation.paragraph %} &middot; {{ _('Paragraph') }} {{ citation.paragraph }}{% endif %}
-                </span>
-              {% endif %}
-              {% if item.available %}
-                <a class="btn btn-xs btn-default" href="{{ url_for('notes.citation_open', citation_id=citation.id) }}">
-                  {{ _('Open in book') }}
-                </a>
-              {% endif %}
-            </div>
           </li>
         {% endfor %}
       </ul>
+    </section>
+  {% endif %}
+
+  <div class="note-quotes">
+    <h3>{{ _('Quotes') }}</h3>
+    {% if citation_views %}
+      <div class="note-quote-list">
+        {% for item in citation_views %}
+          {% set citation = item.citation %}
+          {% set num = citation.seq if citation.seq is not none else citation.id %}
+          {% if item.visible %}
+            <details class="note-quote note-quote-{{ citation.color }}" id="quote-{{ num }}"
+                     data-cwa-quote="{{ num }}">
+              <summary>
+                <span class="note-quote-num">[#{{ num }}]</span>
+                <span class="note-quote-preview">{{ citation.quote[:80] }}{% if citation.quote|length > 80 %}&hellip;{% endif %}</span>
+                <span class="note-quote-book">{{ item.book_title }}</span>
+              </summary>
+              <div class="note-quote-body">
+                {% if citation.quote %}
+                  <blockquote class="note-quote-text">{{ citation.quote }}</blockquote>
+                {% endif %}
+                <div class="note-quote-meta">
+                  {% if item.book_title %}
+                    <span class="note-quote-book">{{ item.book_title }}</span>
+                  {% else %}
+                    <span class="note-quote-book note-muted">{{ _('Book no longer available') }}</span>
+                  {% endif %}
+                  {% if citation.chapter_label %}
+                    <span class="note-quote-loc">{{ citation.chapter_label }}</span>
+                  {% endif %}
+                  {% if citation.page %}
+                    <span class="note-quote-loc">
+                      {{ _('Page') }} {{ citation.page }}{% if citation.paragraph %} &middot; {{ _('Paragraph') }} {{ citation.paragraph }}{% endif %}
+                    </span>
+                  {% endif %}
+                  {% if item.available %}
+                    <a class="btn btn-xs btn-default" href="{{ url_for('notes.citation_open', citation_id=citation.id) }}">
+                      {{ _('Open in book') }}
+                    </a>
+                  {% endif %}
+                  <button type="button" class="btn btn-xs btn-default" data-cwa-copy-quote
+                          data-copied-text="{{ _('Copied') }}"
+                          data-copy-failed-text="{{ _('Copy failed') }}">
+                    {{ _('Copy quote') }}
+                  </button>
+                </div>
+              </div>
+            </details>
+          {% else %}
+            <p class="note-quote note-muted note-quote-hidden">
+              {{ _('Quote from a book you cannot access') }}
+            </p>
+          {% endif %}
+        {% endfor %}
+      </div>
     {% else %}
       <p class="note-empty-text">{{ _('No quotes in this note yet.') }}</p>
     {% endif %}

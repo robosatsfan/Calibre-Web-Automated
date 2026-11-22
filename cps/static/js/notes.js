@@ -161,6 +161,112 @@
         });
     }
 
+    function textOf(element) {
+        return element ? element.textContent.replace(/\s+/g, " ").trim() : "";
+    }
+
+    function quoteCopyText(scope) {
+        var quote = textOf(scope.querySelector(".note-quote-text"));
+        var book = textOf(scope.querySelector(".note-quote-meta .note-quote-book"));
+        var parts = [];
+        if (book) {
+            parts.push(book);
+        }
+        Array.prototype.forEach.call(scope.querySelectorAll(".note-quote-meta .note-quote-loc"),
+            function (loc) {
+                var text = textOf(loc);
+                if (text) {
+                    parts.push(text);
+                }
+            });
+        var source = parts.join(", ");
+        if (!quote) {
+            return source;
+        }
+        return "\u201e" + quote + "\u201c" + (source ? " \u2014 " + source : "");
+    }
+
+    function copyText(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            return navigator.clipboard.writeText(text);
+        }
+        return new Promise(function (resolve, reject) {
+            var area = document.createElement("textarea");
+            area.value = text;
+            area.setAttribute("readonly", "");
+            area.style.position = "fixed";
+            area.style.top = "-1000px";
+            document.body.appendChild(area);
+            area.select();
+            var ok = false;
+            try {
+                ok = document.execCommand("copy");
+            } catch (e) {
+                ok = false;
+            }
+            document.body.removeChild(area);
+            if (ok) {
+                resolve();
+            } else {
+                reject(new Error("copy failed"));
+            }
+        });
+    }
+
+    function flashQuote(details) {
+        details.classList.add("note-flash");
+        window.setTimeout(function () {
+            details.classList.remove("note-flash");
+        }, 1500);
+    }
+
+    function openQuoteRef(num) {
+        var target = document.getElementById("quote-" + num);
+        if (!target) {
+            return false;
+        }
+        target.open = true;
+        if (typeof target.scrollIntoView === "function") {
+            target.scrollIntoView({block: "center", behavior: "smooth"});
+        }
+        flashQuote(target);
+        return true;
+    }
+
+    function initQuoteTools() {
+        document.addEventListener("click", function (event) {
+            var target = event.target;
+            if (!target || !target.closest) {
+                return;
+            }
+            var ref = target.closest("[data-cwa-quote-ref]");
+            if (ref) {
+                if (openQuoteRef(ref.getAttribute("data-cwa-quote-ref"))) {
+                    event.preventDefault();
+                }
+                return;
+            }
+            var button = target.closest("[data-cwa-copy-quote]");
+            if (!button) {
+                return;
+            }
+            var scope = button.closest(".note-quote") || document;
+            var label = button.textContent;
+            var copiedText = button.getAttribute("data-copied-text") || "OK";
+            var failedText = button.getAttribute("data-copy-failed-text") || "";
+            copyText(quoteCopyText(scope)).then(function () {
+                button.textContent = copiedText;
+            }).catch(function () {
+                button.textContent = failedText;
+            }).then(function () {
+                window.setTimeout(function () {
+                    button.textContent = label;
+                }, 1500);
+            });
+        });
+    }
+
     document.addEventListener("DOMContentLoaded", initEditor);
     document.addEventListener("DOMContentLoaded", initCitations);
+    document.addEventListener("DOMContentLoaded", initQuoteTools);
 })();
