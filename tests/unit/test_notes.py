@@ -349,6 +349,27 @@ class TestQuoteSequence:
 
 
 @pytest.mark.unit
+class TestNotesList:
+    def test_quote_counts_per_note(self, env):
+        with_quotes = ub.Note(user_id=env.user_a.id, title='With', body='')
+        without = ub.Note(user_id=env.user_a.id, title='Without', body='')
+        env.session.add_all([with_quotes, without])
+        env.session.commit()
+        env.session.add_all([
+            ub.NoteCitation(note_id=with_quotes.id, user_id=env.user_a.id, book_id=1,
+                            book_format='EPUB', quote='a', cfi_range=CFI, seq=1),
+            ub.NoteCitation(note_id=with_quotes.id, user_id=env.user_a.id, book_id=1,
+                            book_format='EPUB', quote='b', cfi_range=CFI, seq=2),
+        ])
+        env.session.commit()
+
+        with env.app.test_request_context('/notes'):
+            kwargs = _unwrapped('notes_list')()[1]
+        assert kwargs['quote_counts'] == {with_quotes.id: 2}
+        assert {note.id for note in kwargs['notes']} == {with_quotes.id, without.id}
+
+
+@pytest.mark.unit
 class TestPreview:
     def _preview(self, env, payload):
         with env.app.test_request_context('/notes/preview', method='POST', json=payload):

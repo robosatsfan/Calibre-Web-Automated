@@ -78,6 +78,11 @@
     border-color: rgba(60, 160, 220, 0.75);
 }
 
+.note-count-badge {
+    white-space: nowrap;
+    opacity: 0.85;
+}
+
 .note-date {
     font-size: 0.8em;
     opacity: 0.7;

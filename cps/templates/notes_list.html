@@ -84,6 +84,11 @@
             <p class="note-card-excerpt">{{ note.body|truncate(200) }}</p>
           {% endif %}
           <div class="note-card-meta">
+            {% set quote_count = quote_counts.get(note.id, 0) %}
+            <span class="note-pill note-count-badge">
+              <span class="glyphicon glyphicon-comment"></span>
+              {{ quote_count }} {% if quote_count == 1 %}{{ _('Quote') }}{% else %}{{ _('Quotes') }}{% endif %}
+            </span>
             {% if note.tags %}
               {% for tag in note.tags.split(',') if tag %}
                 <span class="note-pill">{{ tag }}</span>

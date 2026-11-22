@@ -243,10 +243,18 @@ def notes_list():
         meta = _book_meta(filters['book_id'])
         book_filter_title = meta['title'] if meta else _('Unknown book')
 
+    quote_counts = {}
+    if own_notes:
+        rows = ub.session.query(ub.NoteCitation.note_id, func.count(ub.NoteCitation.id)) \
+            .filter(ub.NoteCitation.note_id.in_([note.id for note in own_notes])) \
+            .group_by(ub.NoteCitation.note_id).all()
+        quote_counts = {note_id: count for note_id, count in rows}
+
     return render_title_template('notes_list.html',
                                  notes=own_notes,
                                  pagination=pagination,
                                  filters=filters,
+                                 quote_counts=quote_counts,
                                  book_filter_title=book_filter_title,
                                  title=_("Notes"),
                                  page="notes")
