@@ -18,7 +18,7 @@ from types import SimpleNamespace
 import pytest
 from flask import Flask
 from flask_babel import Babel
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 from werkzeug.exceptions import NotFound
 
@@ -237,6 +237,92 @@ class TestCitations:
             body, status = _unwrapped('citation_delete')(citation.id)
         assert status == 204
         assert env.session.query(ub.Note).count() == 1
+
+
+@pytest.mark.unit
+class TestQuoteSequence:
+    def _note(self, env, title='Seq note'):
+        note = ub.Note(user_id=env.user_a.id, title=title, body='')
+        env.session.add(note)
+        env.session.commit()
+        return note
+
+    def _create(self, env, note, payload_extra=None):
+        payload = {'book_id': 1, 'book_format': 'EPUB', 'quote': 'q{}'.format(note.id),
+                   'cfi_range': CFI}
+        payload.update(payload_extra or {})
+        payload['note_id'] = note.id
+        with env.app.test_request_context('/ajax/notes/citation', method='POST', json=payload):
+            response = _unwrapped('citation_create')()
+        if isinstance(response, tuple):
+            response = response[0]
+        return response.get_json()['seq']
+
+    def test_numbers_are_incremental_per_note(self, env):
+        first = self._note(env, 'One')
+        second = self._note(env, 'Two')
+        assert [self._create(env, first) for _ in range(2)] == [1, 2]
+        assert [self._create(env, second) for _ in range(3)] == [1, 2, 3]
+
+    def test_new_note_starts_at_one(self, env):
+        with env.app.test_request_context('/ajax/notes/citation', method='POST',
+                                          json={'book_id': 1, 'book_format': 'EPUB',
+                                                'quote': 'fresh', 'cfi_range': CFI,
+                                                'note_title': 'Brand new'}):
+            response = _unwrapped('citation_create')()
+        if isinstance(response, tuple):
+            response = response[0]
+        assert response.get_json()['seq'] == 1
+
+    def test_number_is_not_reused_after_delete(self, env):
+        note = self._note(env)
+        assert [self._create(env, note) for _ in range(3)] == [1, 2, 3]
+        middle = env.session.query(ub.NoteCitation).filter(
+            ub.NoteCitation.seq == 2).one()
+        with env.app.test_request_context('/delete', method='POST'):
+            _unwrapped('citation_delete')(middle.id)
+        assert self._create(env, note) == 4
+
+    def test_views_are_sorted_by_seq(self, env):
+        note = self._note(env)
+        note.body = ''
+        cit_a = ub.NoteCitation(note_id=note.id, user_id=env.user_a.id, book_id=1,
+                                book_format='EPUB', quote='third', cfi_range=CFI, seq=9)
+        cit_b = ub.NoteCitation(note_id=note.id, user_id=env.user_a.id, book_id=1,
+                                book_format='EPUB', quote='first', cfi_range=CFI, seq=2)
+        env.session.add_all([cit_a, cit_b])
+        env.session.commit()
+        with env.app.test_request_context('/notes/{}'.format(note.id)):
+            views = _unwrapped('note_view')(note.id)[1]['citation_views']
+        assert [item['citation'].seq for item in views] == [2, 9]
+        assert [item['citation'].quote for item in views] == ['first', 'third']
+
+    def test_backfill_numbers_legacy_rows(self, env):
+        note = self._note(env)
+        with env.engine.begin() as conn:
+            conn.execute(text('DROP TABLE note_citation'))
+            conn.execute(text(
+                "CREATE TABLE note_citation (id INTEGER PRIMARY KEY, note_id INTEGER NOT NULL, "
+                "user_id INTEGER NOT NULL, book_id INTEGER NOT NULL, book_format VARCHAR NOT NULL, "
+                "quote VARCHAR NOT NULL, comment VARCHAR NOT NULL, cfi_range VARCHAR, "
+                "chapter_label VARCHAR, page INTEGER, paragraph INTEGER, color VARCHAR NOT NULL, "
+                "created_at DATETIME)"))
+            for offset, created in ((0, '2026-01-01 10:00:00'), (1, '2026-01-01 10:00:05')):
+                conn.execute(text(
+                    "INSERT INTO note_citation (note_id, user_id, book_id, book_format, quote, "
+                    "comment, color, created_at) VALUES ({}, 1, 1, 'EPUB', 'q{}', '', 'yellow', "
+                    "'{}')".format(note.id, offset, created)))
+        env.session.commit()
+
+        numbered = ub.backfill_note_citation_seq(env.engine, env.session)
+
+        assert numbered == 2
+        rows = env.session.execute(text("SELECT quote, seq FROM note_citation ORDER BY seq")).fetchall()
+        assert [tuple(row) for row in rows] == [('q0', 1), ('q1', 2)]
+        # Idempotent: a second run keeps the numbers stable
+        assert ub.backfill_note_citation_seq(env.engine, env.session) == 2
+        again = env.session.execute(text("SELECT quote, seq FROM note_citation ORDER BY seq")).fetchall()
+        assert [tuple(row) for row in again] == [('q0', 1), ('q1', 2)]
 
 
 @pytest.mark.unit

@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, Response, abort, flash, g, jsonify, redirect, request, url_for
 from flask_babel import gettext as _
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 
 from . import calibre_db, logger, ub
 from .cw_login import current_user
@@ -46,6 +46,13 @@ def _visible_note_or_404(note_id):
 
 def _touch_note(note):
     note.updated_at = datetime.now(timezone.utc)
+
+
+def _next_seq(session, note_id):
+    """Next stable quote number for ``note_id`` (never reuses a number)."""
+    highest = session.query(func.max(ub.NoteCitation.seq)).filter(
+        ub.NoteCitation.note_id == note_id).scalar()
+    return (highest or 0) + 1
 
 
 def _book_meta(book_id):
@@ -90,6 +97,7 @@ def _citation_dict(citation):
     return {
         'id': citation.id,
         'note_id': citation.note_id,
+        'seq': citation.seq,
         'note_title': citation.note.title if citation.note else '',
         'book_id': citation.book_id,
         'book_title': meta['title'] if meta else _('Unknown book'),
@@ -113,7 +121,9 @@ def _citation_views(note, is_owner=True):
     notes never expose them.
     """
     views = []
-    for citation in note.citations:
+    citations = sorted(note.citations,
+                       key=lambda item: (item.seq is None, item.seq or 0, item.id or 0))
+    for citation in citations:
         meta = _book_meta(citation.book_id)
         views.append({
             'citation': citation,
@@ -475,8 +485,11 @@ def citation_create():
                        is_public=False)
         ub.session.add(note)
 
+    if note.id is None:
+        ub.session.flush()
     citation = ub.NoteCitation(note=note,
                                user_id=current_user.id,
+                               seq=_next_seq(ub.session, note.id),
                                book_id=values['book_id'],
                                book_format=values['book_format'],
                                quote=values['quote'],

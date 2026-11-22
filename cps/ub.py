@@ -718,6 +718,7 @@ class NoteCitation(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     note_id = Column(Integer, ForeignKey('note.id', ondelete='CASCADE'), nullable=False)
+    seq = Column(Integer, nullable=True)                              # stable per-note number (#1, #2, ...)
     user_id = Column(Integer, ForeignKey('user.id'), nullable=False)  # denormalized for reader queries
     book_id = Column(Integer, nullable=False)                         # calibre metadata.db id; no cross-DB FK
     book_format = Column(String, nullable=False)                      # 'EPUB' | 'KEPUB' | 'PDF'
@@ -729,7 +730,8 @@ class NoteCitation(Base):
     paragraph = Column(Integer, nullable=True)       # PDF only, optional, user-entered
     color = Column(String, nullable=False, default='yellow')
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    __table_args__ = (Index('ix_note_citation_user_book', 'user_id', 'book_id'),)
+    __table_args__ = (Index('ix_note_citation_user_book', 'user_id', 'book_id'),
+                      Index('ix_note_citation_note_seq', 'note_id', 'seq'))
 
 
 class HardcoverBookBlacklist(Base):
@@ -1067,6 +1069,54 @@ def migrate_user_table(engine, _session):
     except Exception as e:
         print(f"[Migration] Warning: Could not update notes sidebar setting: {e}")
         _session.rollback()
+
+    # Migration to add a stable per-note quote number (one-time)
+    try:
+        from . import constants
+
+        migration_dir = os.path.join(constants.CONFIG_DIR, ".cwa_migrations")
+        migration_marker = os.path.join(migration_dir, "notes_citation_seq_v1")
+
+        if not os.path.isfile(migration_marker):
+            numbered = backfill_note_citation_seq(engine, _session)
+            if numbered:
+                print(f"[Migration] Numbered {numbered} existing quote(s)")
+            try:
+                os.makedirs(migration_dir, exist_ok=True)
+                with open(migration_marker, "w", encoding="utf-8") as marker:
+                    marker.write(datetime.now(timezone.utc).isoformat())
+            except Exception as marker_error:
+                print(
+                    f"[Migration] Warning: Could not persist quote number migration marker: {marker_error}",
+                    flush=True,
+                )
+    except Exception as e:
+        print(f"[Migration] Warning: Could not number existing quotes: {e}")
+        _session.rollback()
+
+
+def backfill_note_citation_seq(engine, _session):
+    """Add ``note_citation.seq`` if needed and number existing quotes per note.
+
+    Idempotent. Returns the number of quotes that were numbered.
+    """
+    citation_columns = [row[1] for row in
+                        _session.execute(text("PRAGMA table_info(note_citation)")).fetchall()]
+    if citation_columns and 'seq' not in citation_columns:
+        _run_ddl_with_retry(engine, "ALTER TABLE note_citation ADD column 'seq' Integer DEFAULT NULL")
+    _session.commit()
+
+    rows = _session.execute(text(
+        "SELECT id, note_id FROM note_citation ORDER BY note_id, created_at, id")).fetchall()
+    counters = {}
+    for row in rows:
+        note_id = row[1]
+        counters[note_id] = counters.get(note_id, 0) + 1
+        _session.execute(text("UPDATE note_citation SET seq = :seq WHERE id = :id"),
+                         {'seq': counters[note_id], 'id': row[0]})
+    _session.commit()
+    return len(rows)
+
 
 def migrate_oauth_provider_table(engine, _session):
     try:
